@@ -288,8 +288,7 @@ export default function Overview() {
             </button>
           </div>
 
-          {/* Sub-category pills for vehicles (shown ONLY when viewing Vehicles) */}
-          {mainFilter === "vehicle" && (
+          {(mainFilter === "vehicle" || mainFilter === "all") && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
               <span className="text-[12px] text-steel mr-1 font-medium">
                 Vehicle Type:
