@@ -22,8 +22,8 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html
 
-# Install Laravel dependencies via Composer
-RUN composer install --no-dev --optimize-autoloader
+# Install Laravel dependencies with memory limit disabled and no scripts/dev
+RUN COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # Set permissions for Laravel storage and cache
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
