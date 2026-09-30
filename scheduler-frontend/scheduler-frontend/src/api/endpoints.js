@@ -11,6 +11,9 @@ export const createBooking = (payload) => client.post("/bookings", payload);
 export const updateBookingStatus = (id, status) =>
   client.patch(`/bookings/${id}/status`, { status });
 
+// ⚡ ADD THIS MISSING FUNCTION:
+export const deleteBooking = (id) => client.delete(`/bookings/${id}`);
+
 // --- Resources (facilities & vehicles) ---------------------------------
 export const fetchResources = (type) =>
   client.get("/resources", { params: { type } });
@@ -20,7 +23,6 @@ export const createResource = (payload) => client.post("/resources", payload);
 export const updateResource = (id, payload) =>
   client.put(`/resources/${id}`, payload);
 
-// Add this missing delete function:
 export const deleteResource = (id) => client.delete(`/resources/${id}`);
 
 export const checkHealth = () => client.get("/health");

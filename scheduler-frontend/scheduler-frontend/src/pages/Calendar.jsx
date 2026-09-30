@@ -119,21 +119,36 @@ export default function CalendarView() {
   const [isYearView, setIsYearView] = useState(false);
 
   useEffect(() => {
-    api
-      .fetchBookings?.()
-      .then((res) => {
-        const data = Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-            ? res
-            : [];
-        setBookings(data);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch bookings for calendar:", err);
-        setBookings([]);
-      })
-      .finally(() => setLoading(false));
+    const loadBookings = () => {
+      api
+        .fetchBookings?.()
+        .then((res) => {
+          const data = Array.isArray(res?.data)
+            ? res.data
+            : Array.isArray(res)
+              ? res
+              : [];
+          setBookings(data);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch bookings for calendar:", err);
+          setBookings([]);
+        })
+        .finally(() => setLoading(false));
+    };
+
+    loadBookings();
+
+    // Listen to multiple event variants to ensure deletions/updates are caught immediately
+    window.addEventListener("bookingUpdated", loadBookings);
+    window.addEventListener("bookingDeleted", loadBookings);
+    window.addEventListener("bookingChanged", loadBookings);
+
+    return () => {
+      window.removeEventListener("bookingUpdated", loadBookings);
+      window.removeEventListener("bookingDeleted", loadBookings);
+      window.removeEventListener("bookingChanged", loadBookings);
+    };
   }, []);
 
   const weekDays = getWeekDays(currentDate);
@@ -334,6 +349,14 @@ export default function CalendarView() {
                     <div className="grid grid-cols-7 text-center text-[11px] gap-y-1">
                       {mDays.map((item, dIdx) => {
                         const dayBookings = bookings.filter((b) => {
+                          const status = (b.status || "").toLowerCase();
+                          const isApproved = status.includes("approv");
+                          const isPending =
+                            status.includes("pend") ||
+                            status.includes("request") ||
+                            status.includes("tentative");
+                          if (!isApproved && !isPending) return false;
+
                           const bDate = b.date || b.start_date || "";
                           return bDate.includes(item.fullDateStr);
                         });
@@ -433,6 +456,15 @@ export default function CalendarView() {
                 {/* 7 Days Columns */}
                 {weekDays.map((day, colIdx) => {
                   const colBookings = bookings.filter((b) => {
+                    const status = (b.status || "").toLowerCase();
+                    const isApproved = status.includes("approv");
+                    const isPending =
+                      status.includes("pend") ||
+                      status.includes("request") ||
+                      status.includes("tentative");
+
+                    if (!isApproved && !isPending) return false;
+
                     const bDate = b.date || b.start_date || "";
                     return bDate.includes(day.fullDateStr);
                   });
@@ -455,8 +487,6 @@ export default function CalendarView() {
                           status.includes("pend") ||
                           status.includes("request") ||
                           status.includes("tentative");
-
-                        if (!isApproved && !isPending) return null;
 
                         const resourceName =
                           b.resource ||
@@ -500,7 +530,6 @@ export default function CalendarView() {
                               height: `${Math.max(75, blockHeight)}px`,
                             }}>
                             <div className="space-y-1">
-                              {/* Title and Badge - Stacked / Wrapped gracefully */}
                               <div className="flex flex-wrap items-center justify-between gap-1">
                                 <span className="font-bold text-[12px] leading-tight break-all">
                                   {resourceName}
@@ -516,7 +545,6 @@ export default function CalendarView() {
                                 </span>
                               </div>
 
-                              {/* Time span */}
                               <div className="text-[10.5px] opacity-95 flex items-center gap-1 font-medium">
                                 <Clock size={10} className="shrink-0" />
                                 <span>
@@ -524,7 +552,6 @@ export default function CalendarView() {
                                 </span>
                               </div>
 
-                              {/* Destination / Purpose */}
                               {b.destination && (
                                 <div className="text-[10px] opacity-90 line-clamp-1">
                                   📍 {b.destination}
@@ -532,7 +559,6 @@ export default function CalendarView() {
                               )}
                             </div>
 
-                            {/* Bottom: Requester details using word wrap instead of truncate */}
                             <div
                               className={`text-[10.5px] font-medium opacity-95 pt-1 mt-1 border-t leading-tight break-words ${
                                 isApproved
@@ -590,8 +616,15 @@ export default function CalendarView() {
             const isSelected =
               item.isCurrentMonth && item.dayNum === currentDate.getDate();
 
-            // Check bookings for this mini-calendar day cell
             const dayBookings = bookings.filter((b) => {
+              const status = (b.status || "").toLowerCase();
+              const isApproved = status.includes("approv");
+              const isPending =
+                status.includes("pend") ||
+                status.includes("request") ||
+                status.includes("tentative");
+              if (!isApproved && !isPending) return false;
+
               const bDate = b.date || b.start_date || "";
               return bDate.includes(item.fullDateStr);
             });
@@ -623,7 +656,6 @@ export default function CalendarView() {
                     : "text-steel/30 cursor-default"
                 } ${isSelected ? "bg-brand text-white font-bold" : ""}`}>
                 <span>{item.dayNum}</span>
-                {/* Status Indicator Dots */}
                 {item.isCurrentMonth && (hasApproved || hasPending) && (
                   <div className="flex items-center gap-0.5 absolute bottom-1">
                     {hasApproved && (

@@ -3,7 +3,7 @@ import {
   CalendarClock,
   LayoutGrid,
   ClipboardList,
-  Car,
+  History,
   Building2,
   LogOut,
 } from "lucide-react";
@@ -13,6 +13,12 @@ const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: LayoutGrid, end: true },
   { to: "/calendar", label: "Calendar", icon: CalendarClock },
   { to: "/bookings", label: "Bookings", icon: ClipboardList },
+  {
+    to: "/booking-history",
+    label: "Booking History",
+    icon: History,
+    roles: ["admin"], // Restricted to admin only
+  },
   {
     to: "/resources",
     label: "Facilities & Vehicles",
@@ -36,41 +42,59 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex min-h-screen bg-paper">
-      {/* Sticky Sidebar */}
+      {/* Sidebar */}
       <aside className="sticky top-0 flex h-screen w-60 flex-col border-r border-line bg-white">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white">
-            <CalendarClock size={16} />
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-6 py-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
+            <CalendarClock size={20} />
           </div>
-          <p className="text-[14px] font-semibold leading-tight">Scheduler</p>
+
+          <p className="text-[16px] font-bold leading-tight">Scheduler</p>
         </div>
 
-        <nav className="flex-1 px-3 py-2 overflow-y-auto">
+        {/* Navigation */}
+        <nav
+          className="flex-1 px-4 py-3 overflow-y-auto"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}>
           {visibleItems.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "16px 14px",
+                borderRadius: "10px",
+                fontSize: "15px",
+                fontWeight: "500",
+                textDecoration: "none",
+              }}
               className={({ isActive }) =>
-                `mb-1 flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] transition ${
-                  isActive
-                    ? "bg-brand-light text-brand-dark font-medium"
-                    : "text-steel hover:bg-paper hover:text-ink"
-                }`
+                isActive
+                  ? "bg-brand-light text-brand-dark shadow-sm"
+                  : "text-steel hover:bg-paper hover:text-ink"
               }>
-              <Icon size={16} />
+              <Icon size={20} />
               {label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t border-line px-3 py-3">
-          {/* User Profile Section */}
-          <div className="mb-2 px-3">
-            <p className="truncate text-[13px] font-medium text-ink">
+        {/* User Section */}
+        <div className="border-t border-line px-4 py-4">
+          <div className="mb-3 px-3">
+            <p className="truncate text-[14px] font-medium text-ink">
               {user?.username || user?.name || "Signed in user"}
             </p>
-            <p className="truncate text-[12px] text-steel">
+
+            <p className="truncate text-[12.5px] text-steel">
               {user?.barangay
                 ? `Brgy. ${user.barangay}`
                 : user?.role || "Staff"}
@@ -79,14 +103,27 @@ export default function DashboardLayout() {
 
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] text-steel transition hover:bg-paper hover:text-status-rejected">
-            <LogOut size={16} />
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              width: "100%",
+              padding: "16px 14px",
+              borderRadius: "10px",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              border: "none",
+              background: "transparent",
+            }}
+            className="text-steel transition hover:bg-paper hover:text-status-rejected">
+            <LogOut size={20} />
             Sign out
           </button>
         </div>
       </aside>
 
-      {/* Scrollable Main Content */}
+      {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         <Outlet />
       </div>

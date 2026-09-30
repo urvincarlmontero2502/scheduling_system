@@ -9,6 +9,7 @@ import {
   Calendar,
   Clock,
   User,
+  Trash2,
 } from "lucide-react";
 import * as api from "../api/endpoints";
 import StatusBadge from "../components/StatusBadge";
@@ -38,6 +39,94 @@ function formatTimeTo12Hour(timeStr) {
   return `${hours}:${minutes} ${ampm}`;
 }
 
+// Helper function to convert time string to minutes from midnight for accurate comparison
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const clean = timeStr
+    .toLowerCase()
+    .replace(/\s*(am|pm)/, "")
+    .trim();
+  const parts = clean.split(":");
+  let h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1] || "0", 10);
+  if (isNaN(h)) return null;
+  if (timeStr.toLowerCase().includes("pm") && h < 12) h += 12;
+  if (timeStr.toLowerCase().includes("am") && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+// Helper to check for date and time conflicts with existing approved bookings
+function hasTimeDateConflict(targetBooking, allBookings) {
+  const targetResource = (
+    targetBooking.resource ||
+    targetBooking.resource_name ||
+    targetBooking.item_name ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const targetStart = targetBooking.start_date || targetBooking.date;
+  const targetEnd = targetBooking.end_date || targetBooking.date || targetStart;
+
+  if (!targetStart) return false;
+
+  const targetStartTime =
+    targetBooking.start_time ||
+    (targetBooking.time ? targetBooking.time.split("-")[0]?.trim() : null);
+  const targetEndTime =
+    targetBooking.end_time ||
+    (targetBooking.time ? targetBooking.time.split("-")[1]?.trim() : null);
+
+  const tStartMins = timeToMinutes(targetStartTime);
+  const tEndMins = timeToMinutes(targetEndTime);
+
+  for (const b of allBookings) {
+    // Skip self and non-approved bookings
+    const bId = b.id || b.booking_id;
+    const targetId = targetBooking.id || targetBooking.booking_id;
+    if (bId === targetId) continue;
+    if ((b.status || "").toLowerCase() !== "approved") continue;
+
+    const bResource = (b.resource || b.resource_name || b.item_name || "")
+      .trim()
+      .toLowerCase();
+    if (bResource !== targetResource) continue;
+
+    const bStart = b.start_date || b.date;
+    const bEnd = b.end_date || b.date || bStart;
+    if (!bStart) continue;
+
+    // Check date range overlap
+    if (targetStart <= bEnd && bStart <= targetEnd) {
+      const bStartTime =
+        b.start_time || (b.time ? b.time.split("-")[0]?.trim() : null);
+      const bEndTime =
+        b.end_time || (b.time ? b.time.split("-")[1]?.trim() : null);
+
+      const bStartMins = timeToMinutes(bStartTime);
+      const bEndMins = timeToMinutes(bEndTime);
+
+      // If either booking spans all day (missing times), treat as a time conflict on overlapping dates
+      if (
+        tStartMins === null ||
+        tEndMins === null ||
+        bStartMins === null ||
+        bEndMins === null
+      ) {
+        return true;
+      }
+
+      // Check time overlap within the matching dates
+      if (Math.max(tStartMins, bStartMins) < Math.min(tEndMins, bEndMins)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export default function Bookings() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -59,6 +148,19 @@ export default function Bookings() {
   }, []);
 
   async function handleStatusChange(id, status) {
+    const targetBooking = bookings.find((b) => (b.id || b.booking_id) === id);
+
+    // If attempting to approve, check for time and date conflicts
+    if (status === "approved" && targetBooking) {
+      const hasConflict = hasTimeDateConflict(targetBooking, bookings);
+      if (hasConflict) {
+        alert(
+          "Conflict detected: This resource is already booked for the selected date and time. The request has been automatically rejected. Please advise the user to reschedule.",
+        );
+        status = "rejected";
+      }
+    }
+
     setBookings((prev) =>
       prev.map((b) =>
         b.id === id || b.booking_id === id ? { ...b, status } : b,
@@ -68,6 +170,52 @@ export default function Bookings() {
       await api.updateBookingStatus(id, status);
     } catch {
       // Handle error
+    }
+  }
+
+  async function handleDeleteAllApproved() {
+    const approvedBookings = bookings.filter(
+      (b) => (b.status || "").toLowerCase() === "approved",
+    );
+
+    if (approvedBookings.length === 0) {
+      alert("No approved bookings to delete.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete all ${approvedCount} approved booking(s)? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    const approvedIds = approvedBookings.map((b) => b.id || b.booking_id);
+
+    // Optimistically remove approved bookings from state
+    setBookings((prev) =>
+      prev.filter((b) => !approvedIds.includes(b.id || b.booking_id)),
+    );
+
+    try {
+      await Promise.all(
+        approvedIds.map((id) =>
+          api.deleteBooking
+            ? api.deleteBooking(id)
+            : api.updateBookingStatus(id, "deleted"),
+        ),
+      );
+    } catch {
+      // Revert/refetch on failure
+      api
+        .fetchBookings()
+        .then((res) => {
+          const data = Array.isArray(res?.data)
+            ? res.data
+            : Array.isArray(res)
+              ? res
+              : [];
+          setBookings(data);
+        })
+        .catch(() => {});
     }
   }
 
@@ -112,71 +260,81 @@ export default function Bookings() {
       </header>
 
       <div className="px-6 py-6 space-y-6">
-        {/* Tab Buttons Navigation */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-line pb-4">
-          <button
-            onClick={() => setActiveTab("pending")}
-            className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
-              activeTab === "pending"
-                ? "bg-amber-500 text-white shadow-sm"
-                : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-            }`}>
-            Pending
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
+        {/* Tab Buttons Navigation & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveTab("pending")}
+              className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "pending"
-                  ? "bg-amber-600 text-white"
-                  : "bg-amber-100 text-amber-800"
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
               }`}>
-              {pendingCount}
-            </span>
-          </button>
+              Pending
+              <span
+                className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === "pending"
+                    ? "bg-amber-600 text-white"
+                    : "bg-amber-100 text-amber-800"
+                }`}>
+                {pendingCount}
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("approved")}
-            className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
-              activeTab === "approved"
-                ? "bg-emerald-600 text-white shadow-sm"
-                : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-            }`}>
-            Approved
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
+            <button
+              onClick={() => setActiveTab("approved")}
+              className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "approved"
-                  ? "bg-emerald-700 text-white"
-                  : "bg-emerald-100 text-emerald-800"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
               }`}>
-              {approvedCount}
-            </span>
-          </button>
+              Approved
+              <span
+                className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === "approved"
+                    ? "bg-emerald-700 text-white"
+                    : "bg-emerald-100 text-emerald-800"
+                }`}>
+                {approvedCount}
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("rejected")}
-            className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
-              activeTab === "rejected"
-                ? "bg-rose-600 text-white shadow-sm"
-                : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-            }`}>
-            Rejected
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
+            <button
+              onClick={() => setActiveTab("rejected")}
+              className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "rejected"
-                  ? "bg-rose-700 text-white"
-                  : "bg-rose-100 text-rose-800"
+                  ? "bg-rose-600 text-white shadow-sm"
+                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
               }`}>
-              {rejectedCount}
-            </span>
-          </button>
+              Rejected
+              <span
+                className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === "rejected"
+                    ? "bg-rose-700 text-white"
+                    : "bg-rose-100 text-rose-800"
+                }`}>
+                {rejectedCount}
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
-              activeTab === "all"
-                ? "bg-gray-800 text-white shadow-sm"
-                : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-            }`}>
-            All ({bookings.length})
-          </button>
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
+                activeTab === "all"
+                  ? "bg-gray-800 text-white shadow-sm"
+                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
+              }`}>
+              All ({bookings.length})
+            </button>
+          </div>
+
+          {canModerate && approvedCount > 0 && (
+            <button
+              onClick={handleDeleteAllApproved}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium rounded-lg text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition shadow-sm">
+              <Trash2 size={14} /> Delete All Approved ({approvedCount})
+            </button>
+          )}
         </div>
 
         {/* Bookings Grid Section */}
@@ -332,12 +490,16 @@ export default function Bookings() {
                     {canModerate && isPendingItem && (
                       <div className="flex gap-2 pt-2 border-t border-line">
                         <button
-                          onClick={() => onStatusChange(bookingId, "approved")}
+                          onClick={() =>
+                            handleStatusChange(bookingId, "approved")
+                          }
                           className="flex-1 flex items-center justify-center gap-1.5 rounded border border-status-approved bg-status-approvedBg py-1.5 text-[13px] font-medium text-status-approved hover:bg-emerald-50 transition">
                           <Check size={14} /> Approve
                         </button>
                         <button
-                          onClick={() => onStatusChange(bookingId, "rejected")}
+                          onClick={() =>
+                            handleStatusChange(bookingId, "rejected")
+                          }
                           className="flex-1 flex items-center justify-center gap-1.5 rounded border border-status-rejected bg-status-rejectedBg py-1.5 text-[13px] font-medium text-status-rejected hover:bg-rose-50 transition">
                           <X size={14} /> Reject
                         </button>

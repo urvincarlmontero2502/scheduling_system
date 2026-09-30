@@ -1,8 +1,8 @@
 import axios from "axios";
 
-// Base URL: in dev, Vite proxies /api to your local Laravel server (see vite.config.js).
-// In production, set VITE_API_URL to your deployed API origin, e.g. https://api.yourdomain.com
-const baseURL = import.meta.env.VITE_API_URL || "/api";
+// Base URL: uses VITE_API_URL if set, otherwise defaults directly to your Laravel Herd backend.
+const baseURL =
+  import.meta.env.VITE_API_URL || "http://scheduler-backend.test/api";
 
 const client = axios.create({
   baseURL,

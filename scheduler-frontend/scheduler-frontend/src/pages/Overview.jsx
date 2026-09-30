@@ -249,8 +249,9 @@ export default function Overview() {
 
       {/* Main Content Area */}
       <div className="px-6 pb-6 space-y-6">
-        {/* Main Filter Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line pb-4">
+        {/* Filter Navigation Block */}
+        <div className="border-b border-line pb-4 space-y-3">
+          {/* Main Filter Navigation Buttons */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -288,8 +289,9 @@ export default function Overview() {
             </button>
           </div>
 
-          {(mainFilter === "vehicle" || mainFilter === "all") && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {/* Sub-category pills for vehicles (Shown below buttons when viewing Vehicles) */}
+          {mainFilter === "vehicle" && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
               <span className="text-[12px] text-steel mr-1 font-medium">
                 Vehicle Type:
               </span>
