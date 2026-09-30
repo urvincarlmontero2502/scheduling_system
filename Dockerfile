@@ -1,5 +1,6 @@
-FROM php:8.3-apache
+FROM php:8.4-apache
 
+# Install system dependencies and required PHP extensions
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -23,27 +24,32 @@ RUN apt-get update && apt-get install -y \
         mbstring \
     && rm -rf /var/lib/apt/lists/*
 
+# Enable Apache rewrite module
 RUN a2enmod rewrite
 
+# Install Composer globally
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www/html
 
+# Copy application files from the scheduler-backend folder
 COPY scheduler-backend/ /var/www/html/
 
-RUN php -v && composer --version
-
+# Install PHP dependencies without dev packages
 RUN COMPOSER_MEMORY_LIMIT=-1 composer install \
     --no-dev \
-    --optimize-autoloader \
+    --optimize-autolaoader \
     --no-interaction \
     --no-scripts \
     -vvv
 
+# Set permissions for storage and bootstrap cache
 RUN chown -R www-data:www-data \
     /var/www/html/storage \
     /var/www/html/bootstrap/cache
 
+# Configure Apache Document Root to point to Laravel's public folder
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
 RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
