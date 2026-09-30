@@ -23,7 +23,8 @@ WORKDIR /var/www/html
 # Explicitly copy from scheduler-backend since Dockerfile is at the root
 COPY scheduler-backend/ /var/www/html/
 
-RUN COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+# Run composer with verbose logging (-vvv) to expose the exact error
+RUN COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader --no-interaction --no-scripts -vvv
 
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
