@@ -31,6 +31,8 @@ WORKDIR /var/www/html
 
 COPY scheduler-backend/ /var/www/html/
 
+RUN php -v && composer --version
+
 RUN COMPOSER_MEMORY_LIMIT=-1 composer install \
     --no-dev \
     --optimize-autoloader \
