@@ -1,5 +1,4 @@
 <?php
-# Route cache invalidation: 1791694839
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
