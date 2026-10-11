@@ -73,6 +73,7 @@ export const resolveImageUrl = (imagePath, fullName, email, size = 64) => {
 // --- Bookings -----------------------------------------------------------
 export const fetchBookings = (params) => client.get("/bookings", { params });
 export const createBooking = (payload) => client.post("/bookings", payload);
+export const checkAvailability = (params) => client.get("/bookings/availability", { params });
 export const updateBookingStatus = (id, status, extra = {}) =>
   client.patch(`/bookings/${id}/status`, { status, ...extra });
 

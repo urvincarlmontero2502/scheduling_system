@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Image as ImageIcon,
   Loader2,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 
 // Helper: robustly extract date parts from various formats
@@ -79,6 +81,8 @@ export default function FacilityBookingModal({
   const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
   const [submitting, setSubmitting] = useState(false);
   const [bookings, setBookings] = useState([]);
+  const [suggestedSlots, setSuggestedSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Load bookings so the calendar can show pending / approved days
   useEffect(() => {
@@ -193,6 +197,61 @@ export default function FacilityBookingModal({
 
   const update = (field, value) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+  // Fetch available time slots when dates are selected
+  const fetchSuggestedSlots = (date) => {
+    if (!date || !resourceId) {
+      setSuggestedSlots([]);
+      return;
+    }
+    setLoadingSlots(true);
+    api
+      .checkAvailability({
+        resource_id: resourceId,
+        date: date,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
+      })
+      .then((res) => {
+        const slots = res?.data?.available_slots || res?.available_slots || [];
+        setSuggestedSlots(slots);
+      })
+      .catch(() => {
+        setSuggestedSlots([]);
+      })
+      .finally(() => {
+        setLoadingSlots(false);
+      });
+  };
+
+  // Auto-fetch suggestions when a single date is selected
+  useEffect(() => {
+    if (formData.start_date && !formData.end_date) {
+      fetchSuggestedSlots(formData.start_date);
+    }
+  }, [formData.start_date, formData.end_date, formData.start_time, formData.end_time]);
+
+  // Apply a suggested slot to the form
+  const applySlot = (slot) => {
+    update("start_time", slot.start_time);
+    update("end_time", slot.end_time);
+    setSuggestedSlots([]);
+  };
+
+  // Format minutes to "h:MM AM/PM" for display
+  const formatSlotLabel = (start, end) => {
+    const fmt = (t) => {
+      const m = String(t || "").match(/(\d{1,2}):(\d{2})/i);
+      if (!m) return t;
+      let h = Number(m[1]);
+      const min = m[2];
+      const ap = h < 12 ? "AM" : "PM";
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+      return `${h}:${min} ${ap}`;
+    };
+    return `${fmt(start)} – ${fmt(end)}`;
+  };
 
   const getDaysInMonth = (year, month) =>
     new Date(year, month + 1, 0).getDate();
@@ -380,7 +439,18 @@ export default function FacilityBookingModal({
       status: isDirectUse ? "approved" : "pending",
     };
 
-    Promise.resolve(onSubmit(payload)).finally(() => setSubmitting(false));
+    Promise.resolve(onSubmit(payload))
+      .catch((err) => {
+        // Backend returned a 409 conflict with suggested slots
+        if (err?.response?.status === 409) {
+          const data = err.response.data;
+          const slots = data?.suggested_slots || [];
+          setSuggestedSlots(slots);
+          // Show conflict info from backend
+          console.log("Conflict:", data?.message, data?.conflicting_booking);
+        }
+      })
+      .finally(() => setSubmitting(false));
   };
 
   return (
@@ -547,14 +617,57 @@ export default function FacilityBookingModal({
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
             {conflict && (
-              <p className="mr-auto basis-full text-[11.5px] font-medium text-status-rejected sm:basis-auto sm:max-w-[60%]">
-                Already booked: an approved request holds this resource from{" "}
-                {conflict.start_date} to {conflict.end_date}
-                {conflict.time && conflict.time !== "All Day"
-                  ? ` (${conflict.time})`
-                  : ""}
-                . Choose a different date or time.
-              </p>
+              <div className="mr-auto mb-2 w-full sm:mb-0 sm:w-auto sm:max-w-[70%]">
+                <div className="rounded-lg border border-status-rejected/30 bg-status-rejected/5 px-3 py-2.5">
+                  <p className="flex items-center gap-1.5 text-[11.5px] font-semibold text-status-rejected">
+                    <Clock size={13} />
+                    Resource Unavailable
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-steel">
+                    An approved request holds this resource from{" "}
+                    <span className="font-medium text-ink">{conflict.start_date}</span> to{" "}
+                    <span className="font-medium text-ink">{conflict.end_date}</span>
+                    {conflict.start_time && conflict.end_time && (
+                      <span className="block">
+                        ({conflict.start_time} – {conflict.end_time})
+                      </span>
+                    )}
+                  </p>
+                  {(conflict.purpose || conflict.full_name) && (
+                    <p className="mt-0.5 text-[10.5px] text-steel">
+                      {conflict.full_name && <span>Booked by: {conflict.full_name}</span>}
+                      {conflict.purpose && (
+                        <span className="block">Purpose: {conflict.purpose}</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {suggestedSlots.length > 0 && (
+              <div className="mr-auto mb-2 w-full sm:mb-0 sm:max-w-[70%]">
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink">
+                  <Sparkles size={12} className="text-brand" />
+                  Suggested {suggestedSlots.length === 1 ? "available time" : "available times"}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestedSlots.map((slot, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => applySlot(slot)}
+                      className="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] font-medium text-ink transition-all hover:border-brand hover:bg-brand/5 hover:text-brand"
+                    >
+                      {formatSlotLabel(slot.start_time, slot.end_time)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {loadingSlots && (
+              <div className="mr-auto mb-2 w-full sm:mb-0 sm:max-w-[70%]">
+                <p className="text-[11px] text-steel">Checking availability...</p>
+              </div>
             )}
             <button
               type="button"

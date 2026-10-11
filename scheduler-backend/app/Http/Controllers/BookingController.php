@@ -188,6 +188,36 @@ class BookingController extends Controller
         return response()->json($formatted);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Check Availability & Get Suggested Slots
+    |--------------------------------------------------------------------------
+    |
+    | Given a resource and date, return all available time slots that
+    | match (or exceed) the requested duration. Used by the frontend
+    | to power the "suggested times" recommendation engine.
+    */
+    public function availability(Request $request)
+    {
+        $resourceId = $request->input('resource_id')
+            ?? $request->input('item_id')
+            ?? null;
+
+        $date = $request->input('date');
+        if (!$date) {
+            return response()->json(['message' => 'Date is required'], 422);
+        }
+
+        $startMins = $this->timeToMinutes($request->input('start_time'));
+        $endMins = $this->timeToMinutes($request->input('end_time'));
+
+        $slots = $this->findAvailableSlots($resourceId, $date, $startMins, $endMins);
+
+        return response()->json([
+            'date' => $date,
+            'available_slots' => $slots,
+        ]);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -276,9 +306,29 @@ class BookingController extends Controller
         );
 
         if ($conflict) {
+            $suggestedSlots = $this->findAvailableSlots(
+                $resourceId,
+                $validated['start_date'],
+                $validated['end_time']
+                    ? $this->timeToMinutes($validated['start_time'])
+                    : null,
+                $validated['end_time']
+                    ? $this->timeToMinutes($validated['end_time'])
+                    : null
+            );
+
             return response()->json([
-                'message' => 'This resource is already booked (approved) for the selected date and time. Please choose a different date or time.',
-            ], 422);
+                'message' => 'This resource is already booked (approved) for the selected date and time.',
+                'conflicting_booking' => [
+                    'start_date' => $conflict->start_date,
+                    'end_date' => $conflict->end_date,
+                    'start_time' => $conflict->start_time,
+                    'end_time' => $conflict->end_time,
+                    'full_name' => $conflict->full_name,
+                    'purpose' => $conflict->purpose,
+                ],
+                'suggested_slots' => $suggestedSlots,
+            ], 409);
         }
 
 
@@ -499,11 +549,121 @@ class BookingController extends Controller
         }
 
         $t = strtotime($time);
-
         if ($t === false) {
             return null;
         }
 
         return ((int) date('G', $t)) * 60 + (int) date('i', $t);
+    }
+
+    /**
+     * Find available time slots on a given date that are long enough
+     * for the requested duration.
+     */
+    private function findAvailableSlots($resourceId, $date, $reqStartMins = null, $reqEndMins = null)
+    {
+        if (!$resourceId) {
+            return [];
+        }
+
+        // Default business hours if no specific time was requested
+        if ($reqStartMins === null && $reqEndMins === null) {
+            $reqStartMins = 8 * 60;   // 08:00
+            $reqEndMins = 18 * 60;    // 18:00
+        }
+
+        $duration = ($reqEndMins ?? 18 * 60) - ($reqStartMins ?? 8 * 60);
+        if ($duration <= 0) {
+            $duration = 60; // fallback to 1-hour slot
+        }
+
+        // Get all approved bookings that touch the requested date
+        $bookings = BookingRequest::where('resource_id', $resourceId)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->orderBy('start_date')
+            ->get();
+
+        // Build busy intervals for the day
+        $dayStart = 0;      // midnight
+        $dayEnd = 24 * 60;  // midnight next day
+        $intervals = [];
+
+        foreach ($bookings as $b) {
+            $bStartMins = $this->timeToMinutes($b->start_time);
+            $bEndMins = $this->timeToMinutes($b->end_time);
+
+            if ($bStartMins === null || $bEndMins === null) {
+                // All-day booking — occupies the entire day
+                $intervals[] = [$dayStart, $dayEnd];
+                break;
+            }
+
+            // Clamp to the requested date's boundaries
+            $intervals[] = [
+                max($dayStart, $bStartMins),
+                min($dayEnd, $bEndMins),
+            ];
+        }
+
+        // Sort intervals by start time
+        usort($intervals, fn ($a, $b) => $a[0] <=> $b[0]);
+
+        // Merge overlapping intervals
+        $merged = [];
+        foreach ($intervals as $iv) {
+            if (empty($merged) || $merged[count($merged) - 1][1] < $iv[0]) {
+                $merged[] = $iv;
+            } else {
+                $merged[count($merged) - 1][1] = max($merged[count($merged) - 1][1], $iv[1]);
+            }
+        }
+
+        // Walk business hours and find gaps >= duration
+        $searchStart = max($dayStart, (int) ($reqStartMins ?? 8 * 60));
+        $searchEnd = min($dayEnd, (int) ($reqEndMins ?? 18 * 60));
+        $available = [];
+
+        foreach ($merged as $busy) {
+            $gapStart = $searchStart;
+            $gapEnd = min($busy[0], $searchEnd);
+
+            if ($gapEnd - $gapStart >= $duration) {
+                $available[] = [
+                    'date' => $date,
+                    'start_time' => $this->minutesToTime($gapStart),
+                    'end_time' => $this->minutesToTime($gapStart + $duration),
+                    'duration_minutes' => $duration,
+                ];
+            }
+
+            $searchStart = max($searchStart, $busy[1]);
+            if ($searchStart >= $searchEnd) {
+                break;
+            }
+        }
+
+        // Check final gap after last booking
+        if ($searchStart < $searchEnd && ($searchEnd - $searchStart) >= $duration) {
+            $available[] = [
+                'date' => $date,
+                'start_time' => $this->minutesToTime($searchStart),
+                'end_time' => $this->minutesToTime($searchStart + $duration),
+                'duration_minutes' => $duration,
+            ];
+        }
+
+        return $available;
+    }
+
+    /**
+     * Convert minutes-since-midnight to "HH:MM" format.
+     */
+    private function minutesToTime($mins)
+    {
+        $hours = (int) floor($mins / 60);
+        $minutes = $mins % 60;
+        return sprintf('%02d:%02d', $hours, $minutes);
     }
 }
