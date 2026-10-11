@@ -7,6 +7,36 @@ import FacilityBookingModal from "../components/FacilityBookingModal";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import { SkeletonStatCard, SkeletonResourceCard } from "../components/Skeleton";
 
+/** Status badge configuration */
+const STATUS_VARIANTS = {
+  available: {
+    label: "Available",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  booked: {
+    label: "In Use",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  maintenance: {
+    label: "🟡 Maintenance",
+    className: "bg-yellow-50 text-yellow-800 border-yellow-200",
+  },
+};
+
+/** Resolve the display status of a resource */
+function getResourceStatus(item) {
+  if (item.is_maintenance || item.status === "maintenance") return "maintenance";
+  if (item.available === false || item.status === "booked") return "booked";
+  return "available";
+}
+
+/** Format capacity with "pax" suffix, avoiding duplication */
+function formatCapacity(cap) {
+  if (!cap) return "N/A";
+  if (/\bpax$/i.test(cap)) return cap;
+  return `${cap} pax`;
+}
+
 export default function Overview() {
   const { user } = useAuth();
   const [stats, setStats] = useState({ pending: 0, approved: 0 });
@@ -17,10 +47,10 @@ export default function Overview() {
   const [dbStatus, setDbStatus] = useState(null);
 
   const [selectedResource, setSelectedResource] = useState(null);
-  const [mainFilter, setMainFilter] = useState("all"); // "all" | "facility" | "vehicle"
-  const [vehicleSubFilter, setVehicleSubFilter] = useState("all"); // "all" | "heavy" | "ambulance" | "service"
+  const [mainFilter, setMainFilter] = useState("all");
+  const [vehicleSubFilter, setVehicleSubFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [availabilityFilter, setAvailabilityFilter] = useState("all"); // "all" | "available" | "booked"
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -48,16 +78,13 @@ export default function Overview() {
         const bookings = Array.isArray(bookingsRes?.data)
           ? bookingsRes.data
           : Array.isArray(bookingsRes)
-            ? bookingsRes
-            : [];
-
-        // Yearly special events are not requests
+          ? bookingsRes
+          : [];
         const requests = bookings.filter((b) => !isSpecialEvent(b));
 
         const pendingCount = requests.filter(
           (b) => b?.status?.toLowerCase() === "pending",
         ).length;
-
         const approvedCount = requests.filter(
           (b) => b?.status?.toLowerCase() === "approved",
         ).length;
@@ -118,21 +145,20 @@ export default function Overview() {
     (r) => r?.type?.toLowerCase() === "vehicle",
   );
 
-  // Apply search and availability filters
   const applyFilters = (items) => {
     return items.filter((item) => {
-      // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const name = (item?.name || "").toLowerCase();
         const description = (item?.description || "").toLowerCase();
         if (!name.includes(query) && !description.includes(query)) return false;
       }
-      // Availability filter
       if (availabilityFilter === "available") {
-        if (item?.available !== true && item?.status !== "available") return false;
+        if (item?.available !== true && item?.status !== "available")
+          return false;
       } else if (availabilityFilter === "booked") {
-        if (item?.available !== false && item?.status !== "booked") return false;
+        if (item?.available !== false && item?.status !== "booked")
+          return false;
       }
       return true;
     });
@@ -141,11 +167,11 @@ export default function Overview() {
   const facilities = applyFilters(allFacilities);
   const vehicles = applyFilters(allVehicles);
 
-  // Helper function to categorize vehicles based on their names (with typo handling for 'abulance')
   const getVehicleCategory = (name = "") => {
     const lower = name.toLowerCase();
     if (
       lower.includes("dumptruck") ||
+      lower.includes("backhole") ||
       lower.includes("backhoe") ||
       lower.includes("payloader") ||
       lower.includes("bulldozer") ||
@@ -173,13 +199,11 @@ export default function Overview() {
     (v) => getVehicleCategory(v.name) === "service",
   );
 
-  // Filtered vehicles based on sub-category selection
   const filteredVehicles = vehicles.filter((v) => {
     if (vehicleSubFilter === "all") return true;
     return getVehicleCategory(v.name) === vehicleSubFilter;
   });
 
-  // Available resources (for stats display)
   const availableFacilities = allFacilities.filter(
     (f) => f?.available === true || f?.status === "available",
   );
@@ -282,22 +306,22 @@ export default function Overview() {
               <SkeletonStatCard key={`stat-skeleton-${i}`} />
             ))
           : STATS_ITEMS.map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-lg border border-line bg-white p-4 shadow-sm">
-            <p className={`font-mono text-[28px] font-semibold ${stat.tone}`}>
-              {stat.value}
-            </p>
-            <p className="mt-1 text-[13px] text-steel">{stat.label}{stat.subLabel ? ` ${stat.subLabel}` : ""}</p>
-          </div>
-        ))}
+              <div
+                key={stat.label}
+                className="rounded-lg border border-line bg-white p-4 shadow-sm"
+              >
+                <p className={`font-mono text-[28px] font-semibold ${stat.tone}`}>
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-[13px] text-steel">{stat.label}{stat.subLabel ? ` ${stat.subLabel}` : ""}</p>
+              </div>
+            ))}
       </div>
 
       {/* Main Content Area */}
       <div className="px-4 sm:px-6 pb-6 space-y-6">
         {/* Filter Navigation Block */}
         <div className="border-b border-line pb-4 space-y-3">
-          {/* Main Filter Navigation Buttons */}
           <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
             <button
               onClick={() => {
@@ -308,34 +332,32 @@ export default function Overview() {
                 mainFilter === "all"
                   ? "bg-brand text-white shadow-sm"
                   : "bg-white border border-line text-steel hover:bg-paper"
-              }`}>
+              }`}
+            >
               All Resources ({resources.length})
             </button>
             <button
-              onClick={() => {
-                setMainFilter("facility");
-              }}
+              onClick={() => setMainFilter("facility")}
               className={`px-4 py-2 rounded-lg text-[13px] font-medium transition ${
                 mainFilter === "facility"
                   ? "bg-brand text-white shadow-sm"
                   : "bg-white border border-line text-steel hover:bg-paper"
-              }`}>
+              }`}
+            >
               Facilities ({facilities.length})
             </button>
             <button
-              onClick={() => {
-                setMainFilter("vehicle");
-              }}
+              onClick={() => setMainFilter("vehicle")}
               className={`px-4 py-2 rounded-lg text-[13px] font-medium transition ${
                 mainFilter === "vehicle"
                   ? "bg-brand text-white shadow-sm"
                   : "bg-white border border-line text-steel hover:bg-paper"
-              }`}>
+              }`}
+            >
               Vehicles ({vehicles.length})
             </button>
           </div>
 
-          {/* Search and Availability Filter */}
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-steel" />
@@ -372,7 +394,6 @@ export default function Overview() {
               Clear filters
             </button>
           )}
-          {/* Sub-category pills for vehicles (Shown below buttons when viewing Vehicles) */}
           {mainFilter === "vehicle" && (
             <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
               <span className="text-[12px] text-steel mr-1 font-medium">
@@ -384,7 +405,8 @@ export default function Overview() {
                   vehicleSubFilter === "all"
                     ? "bg-ink text-white"
                     : "bg-paper border border-line text-steel hover:bg-gray-100"
-                }`}>
+                }`}
+              >
                 All ({vehicles.length})
               </button>
               <button
@@ -393,7 +415,8 @@ export default function Overview() {
                   vehicleSubFilter === "heavy"
                     ? "bg-ink text-white"
                     : "bg-paper border border-line text-steel hover:bg-gray-100"
-                }`}>
+                }`}
+              >
                 Heavy Equipment ({heavyEquipment.length})
               </button>
               <button
@@ -402,7 +425,8 @@ export default function Overview() {
                   vehicleSubFilter === "ambulance"
                     ? "bg-ink text-white"
                     : "bg-paper border border-line text-steel hover:bg-gray-100"
-                }`}>
+                }`}
+              >
                 Ambulances ({ambulances.length})
               </button>
               <button
@@ -411,14 +435,15 @@ export default function Overview() {
                   vehicleSubFilter === "service"
                     ? "bg-ink text-white"
                     : "bg-paper border border-line text-steel hover:bg-gray-100"
-                }`}>
+                }`}
+              >
                 Service Vehicles ({serviceVehicles.length})
               </button>
             </div>
           )}
         </div>
 
-        {/* Facilities Section (Shown if mainFilter is 'all' or 'facility') */}
+        {/* Facilities Section */}
         {(mainFilter === "all" || mainFilter === "facility") && (
           <div>
             <h2 className="text-[15px] font-semibold text-ink flex items-center gap-2 mb-3">
@@ -426,7 +451,7 @@ export default function Overview() {
               ({facilities.length})
             </h2>
             {loading ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonResourceCard key={`facility-skeleton-${i}`} />
                 ))}
@@ -438,79 +463,79 @@ export default function Overview() {
                   : "No facilities found."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {facilities.map((item) => (
-                  <div
-                    key={item.resource_id || item.id}
-                    onClick={() => handleOpenBooking(item)}
-                    className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
-                      {item.image && item.image.trim() !== "" ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center text-steel gap-1">
-                          <div className="rounded-lg bg-blue-50 p-3 border border-blue-100">
-                            <Building2 size={28} className="text-blue-400" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {facilities.map((item) => {
+                  const status = getResourceStatus(item);
+                  const isMaintenance = status === "maintenance";
+                  return (
+                    <div
+                      key={item.resource_id || item.id}
+                      onClick={() => handleOpenBooking(item)}
+                      className="group flex flex-col h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
+                    >
+                      <div className="relative h-20 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                        {item.image && item.image.trim() !== "" ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center text-steel gap-1">
+                            <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-100">
+                              <Building2 size={24} className="text-blue-400" />
+                            </div>
+                            <span className="text-[10px]">No image provided</span>
                           </div>
-                          <span className="text-[11px]">No image provided</span>
-                        </div>
-                      )}
-                      <span
-                        className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                          item.is_maintenance || item.status === "maintenance"
-                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                        )}
+                        <span
+                          className={`absolute top-1.5 right-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border ${
+                            isMaintenance
+                              ? "bg-orange-50 text-orange-700 border-orange-200"
+                              : item.available
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}
+                        >
+                          {isMaintenance
+                            ? "Maintenance"
                             : item.available
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}>
-                        {item.is_maintenance || item.status === "maintenance"
-                          ? "Maintenance"
-                          : item.available
-                            ? "Available"
-                            : "In Use"}
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
-                        {item.name}
-                      </h3>
-                      <p className="mt-2 text-[13px] text-steel">
-                        Capacity:{" "}
-                        <span className="font-medium text-ink">
-                          {(() => {
-                            const cap = item.capacity;
-                            if (!cap) return "N/A";
-                            // Avoid duplicate "pax" suffix if already present
-                            if (/\bpax$/i.test(cap)) return cap;
-                            return `${cap} pax`;
-                          })()}
+                              ? "Available"
+                              : "In Use"}
                         </span>
-                      </p>
-                      <p className="mt-1 text-[12.5px] text-steel truncate">
-                        {item.description || "No description provided."}
-                      </p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenBooking(item);
-                        }}
-                        className="mt-3 w-full rounded-lg bg-brand px-4 py-2.5 text-[12.5px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1.5"
-                      >
-                        <Calendar size={14} /> Request Booking
-                      </button>
+                      </div>
+                      <div className="flex flex-col flex-1 p-2.5">
+                        <h3 className="text-[13px] font-semibold text-ink line-clamp-1">
+                          {item.name}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-steel">
+                          Capacity:{" "}
+                          <span className="font-medium text-ink">
+                            {formatCapacity(item.capacity)}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-[10px] text-steel line-clamp-2">
+                          {item.description || "No description provided."}
+                        </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBooking(item);
+                          }}
+                          className="mt-auto w-full rounded-lg bg-brand px-2 py-1.5 text-[10px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1"
+                        >
+                          <Calendar size={12} /> Request
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
-        {/* Vehicles Section (Shown if mainFilter is 'all' or 'vehicle') */}
+        {/* Vehicles Section */}
         {(mainFilter === "all" || mainFilter === "vehicle") && (
           <div>
             <h2 className="text-[15px] font-semibold text-ink flex items-center gap-2 mb-3">
@@ -518,7 +543,7 @@ export default function Overview() {
               {filteredVehicles.length})
             </h2>
             {loading ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonResourceCard key={`vehicle-skeleton-${i}`} />
                 ))}
@@ -530,69 +555,75 @@ export default function Overview() {
                   : "No vehicles found in this category."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredVehicles.map((item) => (
-                  <div
-                    key={item.resource_id || item.id}
-                    onClick={() => handleOpenBooking(item)}
-                    className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
-                      {item.image && item.image.trim() !== "" ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center text-steel gap-1">
-                          <div className="rounded-lg bg-amber-50 p-3 border border-amber-100">
-                            <Car size={28} className="text-amber-400" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {filteredVehicles.map((item) => {
+                  const status = getResourceStatus(item);
+                  const isMaintenance = status === "maintenance";
+                  return (
+                    <div
+                      key={item.resource_id || item.id}
+                      onClick={() => handleOpenBooking(item)}
+                      className="group flex flex-col h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
+                    >
+                      <div className="relative h-20 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                        {item.image && item.image.trim() !== "" ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center text-steel gap-1">
+                            <div className="rounded-lg bg-amber-50 p-2.5 border border-amber-100">
+                              <Car size={24} className="text-amber-400" />
+                            </div>
+                            <span className="text-[10px]">No image provided</span>
                           </div>
-                          <span className="text-[11px]">No image provided</span>
-                        </div>
-                      )}
-                      <span
-                        className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                          item.is_maintenance || item.status === "maintenance"
-                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                        )}
+                        <span
+                          className={`absolute top-1.5 right-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border ${
+                            isMaintenance
+                              ? "bg-orange-50 text-orange-700 border-orange-200"
+                              : item.available
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}
+                        >
+                          {isMaintenance
+                            ? "Maintenance"
                             : item.available
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}>
-                        {item.is_maintenance || item.status === "maintenance"
-                          ? "Maintenance"
-                          : item.available
-                            ? "Available"
-                            : "In Use"}
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
-                        {item.name}
-                      </h3>
-                      <p className="mt-2 text-[13px] text-steel">
-                        Unit Details:{" "}
-                        <span className="font-medium text-ink">
-                          {item.unit_name || item.capacity
-                            ? `${item.unit_name || item.capacity}`
-                            : "N/A"}
+                              ? "Available"
+                              : "In Use"}
                         </span>
-                      </p>
-                      <p className="mt-1 text-[12.5px] text-steel truncate">
-                        {item.description || "No description provided."}
-                      </p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenBooking(item);
-                        }}
-                        className="mt-3 w-full rounded-lg bg-brand px-4 py-2.5 text-[12.5px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1.5"
-                      >
-                        <Calendar size={14} /> Request Booking
-                      </button>
+                      </div>
+                      <div className="flex flex-col flex-1 p-2.5">
+                        <h3 className="text-[13px] font-semibold text-ink line-clamp-1">
+                          {item.name}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-steel">
+                          Unit Details:{" "}
+                          <span className="font-medium text-ink">
+                            {item.unit_name || item.capacity
+                              ? `${item.unit_name || item.capacity}`
+                              : "N/A"}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-[10px] text-steel line-clamp-2">
+                          {item.description || "No description provided."}
+                        </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBooking(item);
+                          }}
+                          className="mt-auto w-full rounded-lg bg-brand px-2 py-1.5 text-[10px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1"
+                        >
+                          <Calendar size={12} /> Request
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
