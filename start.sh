@@ -1,10 +1,13 @@
 #!/bin/sh
 set -e
 
-php artisan config:clear
-php artisan cache:clear
-php artisan route:clear
+# Clear ALL caches first (including any stale route cache from previous deployment)
+php artisan optimize:clear
+
+# Then re-cache only the config (NOT routes — route:cache can cause stale routes)
 php artisan config:cache
+
+# Run migrations (non-fatal — some may have already run)
 php artisan migrate --force 2>/dev/null || echo "Migrations completed (some may have already run)"
 
 # Optional one-time seeding: set RUN_SEED=true in Render, deploy once, then remove it
