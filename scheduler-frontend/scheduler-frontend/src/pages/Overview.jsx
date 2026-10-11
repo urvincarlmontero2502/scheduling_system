@@ -201,13 +201,13 @@ export default function Overview() {
     {
       label: "Facilities",
       value: `${availableFacilities.length}/${allFacilities.length}`,
-      subLabel: "(available/total)",
+      subLabel: "available/total",
       tone: "text-ink",
     },
     {
       label: "Vehicles",
       value: `${availableVehicles.length}/${allVehicles.length}`,
-      subLabel: "(available/total)",
+      subLabel: "available/total",
       tone: "text-ink",
     },
   ];
@@ -298,7 +298,7 @@ export default function Overview() {
         {/* Filter Navigation Block */}
         <div className="border-b border-line pb-4 space-y-3">
           {/* Main Filter Navigation Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
             <button
               onClick={() => {
                 setMainFilter("all");
@@ -444,7 +444,7 @@ export default function Overview() {
                     key={item.resource_id || item.id}
                     onClick={() => handleOpenBooking(item)}
                     className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                    <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
                       {item.image && item.image.trim() !== "" ? (
                         <img
                           src={item.image}
@@ -453,8 +453,8 @@ export default function Overview() {
                         />
                       ) : (
                         <div className="flex flex-col items-center text-steel gap-1">
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <Building2 size={24} className="text-gray-400" />
+                          <div className="rounded-lg bg-blue-50 p-3 border border-blue-100">
+                            <Building2 size={28} className="text-blue-400" />
                           </div>
                           <span className="text-[11px]">No image provided</span>
                         </div>
@@ -481,15 +481,21 @@ export default function Overview() {
                       <p className="mt-2 text-[13px] text-steel">
                         Capacity:{" "}
                         <span className="font-medium text-ink">
-                          {item.capacity || "—"}
+                          {item.capacity ? `${item.capacity} pax` : "N/A"}
                         </span>
                       </p>
                       <p className="mt-1 text-[12.5px] text-steel truncate">
                         {item.description || "No description provided."}
                       </p>
-                      <div className="mt-3 text-[12px] font-medium text-brand">
-                        Click to request booking →
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenBooking(item);
+                        }}
+                        className="mt-3 w-full rounded-lg bg-brand px-4 py-2.5 text-[12.5px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1.5"
+                      >
+                        <Calendar size={14} /> Request Booking
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -524,7 +530,7 @@ export default function Overview() {
                     key={item.resource_id || item.id}
                     onClick={() => handleOpenBooking(item)}
                     className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
-                    <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                    <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
                       {item.image && item.image.trim() !== "" ? (
                         <img
                           src={item.image}
@@ -533,8 +539,8 @@ export default function Overview() {
                         />
                       ) : (
                         <div className="flex flex-col items-center text-steel gap-1">
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <Car size={24} className="text-gray-400" />
+                          <div className="rounded-lg bg-amber-50 p-3 border border-amber-100">
+                            <Car size={28} className="text-amber-400" />
                           </div>
                           <span className="text-[11px]">No image provided</span>
                         </div>
@@ -567,9 +573,15 @@ export default function Overview() {
                       <p className="mt-1 text-[12.5px] text-steel truncate">
                         {item.description || "No description provided."}
                       </p>
-                      <div className="mt-3 text-[12px] font-medium text-brand">
-                        Click to request booking →
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenBooking(item);
+                        }}
+                        className="mt-3 w-full rounded-lg bg-brand px-4 py-2.5 text-[12.5px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1.5"
+                      >
+                        <Calendar size={14} /> Request Booking
+                      </button>
                     </div>
                   </div>
                 ))}

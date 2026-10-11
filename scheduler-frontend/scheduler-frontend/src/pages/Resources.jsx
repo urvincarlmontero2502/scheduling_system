@@ -299,7 +299,7 @@ export default function Resources() {
         className="group flex flex-col h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
       >
         {/* Thumbnail with status badge overlay */}
-        <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+        <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
           {item.image ? (
             <img
               src={item.image}
@@ -309,16 +309,18 @@ export default function Resources() {
               }`}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-2 text-steel">
+            <div className={`flex flex-col items-center justify-center gap-2 text-steel ${
+              isMaintenance ? "opacity-60" : ""
+            }`}>
               <div className={`rounded-lg p-3 ${
-                isMaintenance ? "bg-gray-100" : "bg-gray-50"
+                isMaintenance ? "bg-gray-100" : resourceType === "vehicle" ? "bg-amber-50 border border-amber-100" : "bg-blue-50 border border-blue-100"
               }`}>
                 {resourceType === "vehicle" ? (
-                  <Car size={32} className={`text-gray-400 ${
+                  <Car size={28} className={`text-amber-400 ${
                     isMaintenance ? "opacity-50" : ""
                   }`} />
                 ) : (
-                  <Building2 size={32} className={`text-gray-400 ${
+                  <Building2 size={28} className={`text-blue-400 ${
                     isMaintenance ? "opacity-50" : ""
                   }`} />
                 )}
@@ -388,9 +390,11 @@ export default function Resources() {
           </div>
 
           <p className="mt-2 text-[13px] text-steel">
-            Details:{" "}
+            {item.type === "vehicle" ? "Unit Details:" : "Capacity:"}{" "}
             <span className="font-medium text-ink">
-              {item.capacity || item.unit_name || "—"}
+              {item.unit_name || item.capacity
+                ? `${item.unit_name || item.capacity}${item.type === "facility" && item.capacity ? " pax" : ""}`
+                : "N/A"}
             </span>
           </p>
           <p className="mt-1 text-[12.5px] text-steel line-clamp-2">
@@ -466,7 +470,7 @@ export default function Resources() {
       </div>
 
       {/* Segmented Control / Tab Filter */}
-      <div className="mb-6 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 border border-line">
+      <div className="mb-6 flex flex-wrap gap-1 overflow-x-auto whitespace-nowrap rounded-lg bg-gray-100 p-1 border border-line">
         <button
           onClick={() => handleTabClick("all")}
           className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-medium transition ${
