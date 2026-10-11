@@ -120,6 +120,7 @@ export default function BookingHistory() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+      return () => {}; // cleanup placeholder for safety
   }, []);
 
   const historyBookings = bookings.filter((booking) => {

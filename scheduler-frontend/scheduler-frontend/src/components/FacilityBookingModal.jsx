@@ -224,17 +224,26 @@ export default function FacilityBookingModal({
       });
   };
 
-  // Auto-fetch suggestions when a single date is selected
+  // Auto-fetch suggestions when a single date is selected (not when user
+  // just changed start/end_time via slot selection)
   useEffect(() => {
-    if (formData.start_date && !formData.end_date) {
+    if (formData.start_date && !formData.end_date && !formData.start_time_changed) {
       fetchSuggestedSlots(formData.start_date);
     }
-  }, [formData.start_date, formData.end_date, formData.start_time, formData.end_time]);
+  }, [formData.start_date, formData.end_date]);
+
+  // Reset the flag when start_date changes (new date selection)
+  useEffect(() => {
+    if (formData.start_date) {
+      setFormData((prev) => ({ ...prev, start_time_changed: false }));
+    }
+  }, [formData.start_date]);
 
   // Apply a suggested slot to the form
   const applySlot = (slot) => {
     update("start_time", slot.start_time);
     update("end_time", slot.end_time);
+    update("start_time_changed", true);
     setSuggestedSlots([]);
   };
 
