@@ -329,7 +329,12 @@ export default function Bookings() {
     }
 
     const barangayName =
-      b.barangay || b.user?.barangay || b.user?.name || b.name || "";
+      b.barangay ||
+      b.user?.barangay ||
+      b.user?.full_name ||
+      b.user?.name ||
+      b.name ||
+      "";
     if (barangayFilter !== "all" && barangayName !== barangayFilter) {
       return false;
     }
@@ -344,6 +349,7 @@ export default function Bookings() {
         (b) =>
           b.barangay ||
           b.user?.barangay ||
+          b.user?.full_name ||
           b.user?.name ||
           b.name ||
           "Poblacion",
@@ -604,6 +610,7 @@ export default function Bookings() {
                   const barangayName =
                     b.barangay ||
                     b.user?.barangay ||
+                    b.user?.full_name ||
                     b.user?.name ||
                     b.name ||
                     "Poblacion";
@@ -726,6 +733,7 @@ export default function Bookings() {
               const barangayName =
                 b.barangay ||
                 b.user?.barangay ||
+                b.user?.full_name ||
                 b.user?.name ||
                 b.name ||
                 "Poblacion";

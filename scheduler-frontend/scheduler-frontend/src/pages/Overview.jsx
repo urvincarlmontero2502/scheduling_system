@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
-import { Building2, Car, Search, Filter } from "lucide-react";
+import { Building2, Car, Search, Filter, Calendar } from "lucide-react";
 import * as api from "../api/endpoints";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import VehicleBookingModal from "../components/VehicleBookingModal";
@@ -219,7 +219,7 @@ export default function Overview() {
       <header className="flex flex-col gap-3 border-b border-line bg-white px-4 sm:px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[17px] font-semibold">
-            Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+            Welcome back{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""}
           </h1>
           <p className="text-[13px] text-steel">
             Here's what's happening with facility and vehicle bookings. Click
