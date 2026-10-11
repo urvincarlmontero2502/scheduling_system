@@ -1,4 +1,4 @@
-import { useState, useRef, useContext } from "react";
+import { useState, useRef, useContext, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import * as api from "../api/endpoints";
 import {
@@ -16,9 +16,20 @@ import {
   X,
   Trash2,
 } from "lucide-react";
+import { SkeletonAvatar, SkeletonText, Skeleton } from "../components/Skeleton";
 
 export default function AccountSettings() {
   const { user, signIn, refreshUser } = useAuth();
+  const [profileLoading, setProfileLoading] = useState(!user);
+
+  useEffect(() => {
+    if (!user) {
+      refreshUser().finally(() => setProfileLoading(false));
+    } else {
+      setProfileLoading(false);
+    }
+  }, [user, refreshUser]);
+
   const [formData, setFormData] = useState({
     full_name: user?.full_name || user?.name || "",
     email: user?.email || "",
@@ -254,7 +265,9 @@ export default function AccountSettings() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-line bg-white p-4 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-brand/10 text-brand overflow-hidden">
-              {profileImageUrl ? (
+              {profileLoading ? (
+                <SkeletonAvatar size="h-16 w-16" />
+              ) : profileImageUrl ? (
                 <img
                   src={profileImageUrl}
                   alt={user?.full_name || "User"}
@@ -281,13 +294,23 @@ export default function AccountSettings() {
               />
             </div>
             <div>
-              <p className="text-[14px] font-medium text-ink">
-                {formData.full_name || "Your Name"}
-              </p>
-              <p className="text-[13px] text-steel">{formData.email}</p>
-              <p className="text-[12px] text-steel capitalize">
-                Role: {userRole === "admin" ? "Administrator" : userRole}
-              </p>
+              {profileLoading ? (
+                <>
+                  <SkeletonText lines={1} className="w-40 h-4" />
+                  <SkeletonText lines={1} className="w-56 h-3 mt-1" />
+                  <SkeletonText lines={1} className="w-24 h-3 mt-1" />
+                </>
+              ) : (
+                <>
+                  <p className="text-[14px] font-medium text-ink">
+                    {formData.full_name || "Your Name"}
+                  </p>
+                  <p className="text-[13px] text-steel">{formData.email}</p>
+                  <p className="text-[12px] text-steel capitalize">
+                    Role: {userRole === "admin" ? "Administrator" : userRole}
+                  </p>
+                </>
+              )}
               {uploadSuccess && (
                 <p className="mt-1 text-[12px] text-green-600">{uploadSuccess}</p>
               )}
@@ -320,13 +343,18 @@ export default function AccountSettings() {
                   <User size={13} className="text-steel" />
                   Full Name
                 </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => handleChange("full_name", e.target.value)}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
-                  placeholder="Enter your full name"
-                />
+                {profileLoading ? (
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => handleChange("full_name", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
+                    placeholder="Enter your full name"
+                    disabled={profileLoading}
+                  />
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -334,15 +362,19 @@ export default function AccountSettings() {
                   <Mail size={13} className="text-steel" />
                   Email Address
                 </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
-                  placeholder="Enter your email"
-                  disabled={userRole === "admin"}
-                />
-                {userRole === "admin" && (
+                {profileLoading ? (
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                ) : (
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
+                    placeholder="Enter your email"
+                    disabled={userRole === "admin" || profileLoading}
+                  />
+                )}
+                {userRole === "admin" && !profileLoading && (
                   <p className="mt-1 text-[11.5px] text-steel">
                     To change your email, use the Change Email form in the Security section below.
                   </p>
@@ -354,13 +386,18 @@ export default function AccountSettings() {
                   <MapPin size={13} className="text-steel" />
                   Barangay
                 </label>
-                <input
-                  type="text"
-                  value={formData.barangay}
-                  onChange={(e) => handleChange("barangay", e.target.value)}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
-                  placeholder="Enter your barangay"
-                />
+                {profileLoading ? (
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.barangay}
+                    onChange={(e) => handleChange("barangay", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
+                    placeholder="Enter your barangay"
+                    disabled={profileLoading}
+                  />
+                )}
               </div>
 
               <div>
@@ -368,13 +405,18 @@ export default function AccountSettings() {
                   <Building size={13} className="text-steel" />
                   Department
                 </label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  onChange={(e) => handleChange("department", e.target.value)}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
-                  placeholder="Enter your department"
-                />
+                {profileLoading ? (
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => handleChange("department", e.target.value)}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand"
+                    placeholder="Enter your department"
+                    disabled={profileLoading}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -422,13 +464,17 @@ export default function AccountSettings() {
                   <label className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
                     Current Email
                   </label>
-                  <input
-                    type="email"
-                    value={user?.email || ""}
-                    className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-steel/60 outline-none"
-                    disabled
-                    readOnly
-                  />
+                  {profileLoading ? (
+                    <Skeleton className="h-10 w-full rounded-lg" />
+                  ) : (
+                    <input
+                      type="email"
+                      value={user?.email || ""}
+                      className="w-full rounded-lg border border-line px-3 py-2 text-[13px] text-steel/60 outline-none"
+                      disabled
+                      readOnly
+                    />
+                  )}
                 </div>
 
                 <div>

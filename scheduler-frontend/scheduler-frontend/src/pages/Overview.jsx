@@ -5,6 +5,7 @@ import { Building2, Car, Image as ImageIcon, Search, Filter } from "lucide-react
 import * as api from "../api/endpoints";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import VehicleBookingModal from "../components/VehicleBookingModal";
+import { SkeletonStatCard, SkeletonResourceCard } from "../components/Skeleton";
 
 export default function Overview() {
   const { user } = useAuth();
@@ -189,23 +190,23 @@ export default function Overview() {
   const STATS_ITEMS = [
     {
       label: "Pending requests",
-      value: loading ? "..." : (stats.pending ?? 0),
+      value: stats.pending ?? 0,
       tone: "text-status-pending",
     },
     {
       label: "Approved this week",
-      value: loading ? "..." : (stats.approved ?? 0),
+      value: stats.approved ?? 0,
       tone: "text-status-approved",
     },
     {
       label: "Facilities",
-      value: loading ? "..." : `${availableFacilities.length}/${allFacilities.length}`,
+      value: `${availableFacilities.length}/${allFacilities.length}`,
       subLabel: "(available/total)",
       tone: "text-ink",
     },
     {
       label: "Vehicles",
-      value: loading ? "..." : `${availableVehicles.length}/${allVehicles.length}`,
+      value: `${availableVehicles.length}/${allVehicles.length}`,
       subLabel: "(available/total)",
       tone: "text-ink",
     },
@@ -276,7 +277,11 @@ export default function Overview() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 md:grid-cols-4">
-        {STATS_ITEMS.map((stat) => (
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonStatCard key={`stat-skeleton-${i}`} />
+            ))
+          : STATS_ITEMS.map((stat) => (
           <div
             key={stat.label}
             className="rounded-lg border border-line bg-white p-4 shadow-sm">
@@ -421,7 +426,11 @@ export default function Overview() {
               ({facilities.length})
             </h2>
             {loading ? (
-              <p className="text-[13px] text-steel">Loading facilities...</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonResourceCard key={`facility-skeleton-${i}`} />
+                ))}
+              </div>
             ) : facilities.length === 0 ? (
               <div className="rounded-lg border border-dashed border-line bg-white p-6 text-center text-[13px] text-steel">
                 {searchQuery || availabilityFilter !== "all"
@@ -487,7 +496,11 @@ export default function Overview() {
               {filteredVehicles.length})
             </h2>
             {loading ? (
-              <p className="text-[13px] text-steel">Loading vehicles...</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonResourceCard key={`vehicle-skeleton-${i}`} />
+                ))}
+              </div>
             ) : filteredVehicles.length === 0 ? (
               <div className="rounded-lg border border-dashed border-line bg-white p-6 text-center text-[13px] text-steel">
                 {searchQuery || availabilityFilter !== "all"

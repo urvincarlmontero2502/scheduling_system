@@ -15,6 +15,7 @@ import {
 import * as api from "../api/endpoints";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
+import { SkeletonBookingRow } from "../components/Skeleton";
 
 // Helper function to convert 24hr time (e.g., "17:00") to 12hr AM/PM format (e.g., "5:00 PM")
 function formatTimeTo12Hour(timeStr) {
@@ -135,6 +136,7 @@ function hasTimeDateConflict(targetBooking, allBookings) {
 export default function Bookings() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pending"); // Default to pending tab for quick moderation
   const canModerate = user?.role === "admin";
 
@@ -149,7 +151,8 @@ export default function Bookings() {
             : [];
         setBookings(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleStatusChange(id, status) {
@@ -357,7 +360,13 @@ export default function Bookings() {
         </div>
 
         {/* Bookings Grid Section */}
-        {filteredBookings.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonBookingRow key={`skeleton-${i}`} />
+            ))}
+          </div>
+        ) : filteredBookings.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-line rounded-xl bg-gray-50/50">
             <p className="text-[14px] text-steel italic">{getEmptyMessage()}</p>
           </div>

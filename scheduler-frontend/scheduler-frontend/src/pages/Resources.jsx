@@ -15,6 +15,7 @@ import * as api from "../api/endpoints";
 import { useAuth } from "../context/AuthContext";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import FacilityBookingModal from "../components/FacilityBookingModal";
+import { SkeletonResourceCard } from "../components/Skeleton";
 
 export default function Resources() {
   const { user } = useAuth();
@@ -365,7 +366,11 @@ export default function Resources() {
       </div>
 
       {loading ? (
-        <p className="text-[13px] text-steel">Loading resources...</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonResourceCard />
+          <SkeletonResourceCard />
+          <SkeletonResourceCard />
+        </div>
       ) : resources.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line bg-white p-12 text-center">
           <Building2 size={40} className="text-steel mb-2 opacity-40" />
