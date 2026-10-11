@@ -40,7 +40,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Close the mobile menu when the page changes
   useEffect(() => {
@@ -60,17 +60,20 @@ export default function DashboardLayout() {
   }, [open]);
 
   // Escape closes the sign-out modal
+  const closeSignOutModal = () => {
+    if (!isSigningOut) setShowSignOutModal(false);
+  };
   useEffect(() => {
     if (!showSignOutModal) return;
-    const onKey = (e) => e.key === "Escape" && !signingOut && setShowSignOutModal(false);
+    const onKey = (e) => e.key === "Escape" && closeSignOutModal();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [showSignOutModal, signingOut]);
+  }, [showSignOutModal, isSigningOut]);
 
   const requestSignOut = () => setShowSignOutModal(true);
 
   async function confirmSignOut() {
-    setSigningOut(true);
+    setIsSigningOut(true);
     await signOut();
     setShowSignOutModal(false);
     navigate("/login", { replace: true });
@@ -193,22 +196,22 @@ export default function DashboardLayout() {
       {/* Sign Out Confirmation Modal */}
       {showSignOutModal && (
         <>
-          {/* Backdrop with blur and fade-in */}
+          {/* Backdrop with blur and fade-in — clicking triggers onClose */}
           <div
             className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-200"
-            onClick={() => !signingOut && setShowSignOutModal(false)}
+            onClick={closeSignOutModal}
             aria-hidden="true"
           />
           {/* Modal container with scale + fade-in animation */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
               className={`relative w-full max-w-sm rounded-xl border border-line bg-white p-6 shadow-xl transition-all duration-200 ease-out ${
-                signingOut ? "scale-95 opacity-60" : "scale-100 opacity-100"
+                isSigningOut ? "scale-95 opacity-60" : "scale-100 opacity-100"
               }`}
             >
-              {/* Icon */}
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                <LogOut size={24} className="text-steel" />
+              {/* Icon badge */}
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600 p-3">
+                <LogOut size={24} />
               </div>
 
               {/* Content */}
@@ -222,18 +225,18 @@ export default function DashboardLayout() {
               {/* Buttons */}
               <div className="mt-6 flex gap-3">
                 <button
-                  onClick={() => !signingOut && setShowSignOutModal(false)}
-                  disabled={signingOut}
-                  className="flex-1 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-steel hover:bg-paper transition disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeSignOutModal}
+                  disabled={isSigningOut}
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmSignOut}
-                  disabled={signingOut}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-status-rejected px-4 py-2 text-[13px] font-medium text-white hover:bg-status-rejected/90 transition disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={isSigningOut}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-rose-700 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {signingOut ? (
+                  {isSigningOut ? (
                     <>
                       <Loader size={14} className="animate-spin" />
                       Signing out…
