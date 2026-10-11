@@ -88,6 +88,16 @@ export default function BarangaySetup() {
         localStorage.removeItem("google_registration_token");
         localStorage.setItem("google_auth_success", "true");
         
+        // Verify the token works before redirecting to dashboard
+        try {
+          const userRes = await api.fetchCurrentUser();
+          localStorage.setItem("auth_user", JSON.stringify(userRes.data));
+        } catch (verifyErr) {
+          // Token verification failed — don't navigate yet
+          // This helps catch issues early
+          throw new Error(verifyErr.response?.data?.message || "Token verification failed after registration. Please try logging in manually.");
+        }
+        
         // Redirect to dashboard
         navigate("/");
       } else {

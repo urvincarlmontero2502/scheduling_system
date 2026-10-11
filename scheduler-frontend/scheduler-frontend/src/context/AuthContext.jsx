@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem("auth_token")
     if (!token) {
       setLoading(false)
       return
@@ -21,10 +21,21 @@ export function AuthProvider({ children }) {
       .fetchCurrentUser()
       .then((res) => {
         setUser(res.data)
-        localStorage.setItem('auth_user', JSON.stringify(res.data))
+        localStorage.setItem("auth_user", JSON.stringify(res.data))
       })
       .catch(() => {
-        setUser(null)
+        // Don't immediately clear the user on initial load — the token
+        // might be valid but the request failed due to a transient error.
+        // Keep the user from localStorage so the app doesn't flash to login.
+        // The token will be validated on subsequent API calls.
+        const stored = localStorage.getItem("auth_user")
+        if (stored) {
+          try {
+            setUser(JSON.parse(stored))
+          } catch {
+            setUser(null)
+          }
+        }
       })
       .finally(() => setLoading(false))
   }, [])
