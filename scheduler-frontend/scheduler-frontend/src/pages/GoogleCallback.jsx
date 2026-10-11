@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import * as api from "../api/endpoints";
+import { useAuth } from "../context/AuthContext";
 import { Loader, AlertCircle, CheckCircle } from "lucide-react";
 
 export default function GoogleCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [status, setStatus] = useState("loading"); // loading | success | error
   const [message, setMessage] = useState(
     "Completing Google authentication..."
@@ -34,7 +36,7 @@ export default function GoogleCallback() {
     // Exchange the code for tokens
     api
       .googleCallback(code)
-      .then((res) => {
+      .then(async (res) => {
         if (res.data.temporary_token) {
           // New user — redirect to two-step registration
           localStorage.setItem(
@@ -53,6 +55,14 @@ export default function GoogleCallback() {
             localStorage.setItem("auth_expires_at", expires_at);
           }
           localStorage.setItem("google_auth_success", "true");
+
+          // Refresh the Auth Context so Sidebar/profile updates immediately
+          try {
+            await refreshUser();
+          } catch {
+            // If refresh fails, the localStorage user data is still valid
+          }
+
           setStatus("success");
           setMessage("Successfully signed in with Google!");
           setTimeout(() => navigate("/"), 1500);
@@ -71,7 +81,7 @@ export default function GoogleCallback() {
         localStorage.setItem("google_auth_success", "false");
         setTimeout(() => navigate("/login"), 3000);
       });
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, refreshUser]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper p-4">

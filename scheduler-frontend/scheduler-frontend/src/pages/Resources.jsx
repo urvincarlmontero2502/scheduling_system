@@ -535,7 +535,7 @@ export default function Resources() {
 
       {/* Resource Grid */}
       {loading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonResourceCard key={`skeleton-${i}`} />
           ))}
@@ -553,7 +553,7 @@ export default function Resources() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {displayedItems.map(renderResourceCard)}
         </div>
       )}

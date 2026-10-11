@@ -523,7 +523,7 @@ export default function Bookings() {
         {/* Content Section */}
         {loading ? (
           viewMode === "card" ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonBookingCard key={`skeleton-card-${i}`} />
               ))}
@@ -725,7 +725,7 @@ export default function Bookings() {
           </div>
         ) : (
           // Card View
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
             {filteredBookings.map((b) => {
               const bookingId = b.id || b.booking_id;
               const resourceName =

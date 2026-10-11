@@ -140,9 +140,9 @@ export default function DashboardLayout() {
             end
             className="mb-4 flex items-center gap-3 px-3 py-2 rounded-lg text-steel hover:bg-paper hover:text-ink transition-colors duration-150 no-underline">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand overflow-hidden">
-              {user?.image ? (
+              {user?.profile_image_url ? (
                 <img
-                  src={user.image}
+                  src={user.profile_image_url}
                   alt={user?.full_name || "User"}
                   className="h-full w-full object-cover"
                 />

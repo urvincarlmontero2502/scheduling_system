@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../api/endpoints";
+import { useAuth } from "../context/AuthContext";
 
 const FALLBACK_BARANGAYS = [
   "A. Beltran",
@@ -22,6 +23,7 @@ const FALLBACK_BARANGAYS = [
 
 export default function BarangaySetup() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [barangays, setBarangays] = useState(FALLBACK_BARANGAYS);
   const [selectedBarangay, setSelectedBarangay] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,12 +99,25 @@ export default function BarangaySetup() {
           // This helps catch issues early
           throw new Error(verifyErr.response?.data?.message || "Token verification failed after registration. Please try logging in manually.");
         }
-        
+
+        // Refresh the Auth Context so the Sidebar reflects the new user profile immediately
+        try {
+          await refreshUser();
+        } catch {
+          // If refresh fails, the localStorage user data is still valid
+        }
+
         // Redirect to dashboard
         navigate("/");
       } else {
         // Existing user updating their barangay
         await api.updateUser({ barangay: selectedBarangay });
+        // Refresh Auth Context so the Sidebar reflects the updated barangay
+        try {
+          await refreshUser();
+        } catch {
+          // If refresh fails, the update still succeeded on the backend
+        }
         navigate("/");
       }
     } catch (err) {

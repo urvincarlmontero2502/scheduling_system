@@ -451,7 +451,7 @@ export default function Overview() {
               ({facilities.length})
             </h2>
             {loading ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonResourceCard key={`facility-skeleton-${i}`} />
                 ))}
@@ -463,7 +463,7 @@ export default function Overview() {
                   : "No facilities found."}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {facilities.map((item) => {
                   const status = getResourceStatus(item);
                   const isMaintenance = status === "maintenance";
@@ -543,7 +543,7 @@ export default function Overview() {
               {filteredVehicles.length})
             </h2>
             {loading ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonResourceCard key={`vehicle-skeleton-${i}`} />
                 ))}
@@ -555,7 +555,7 @@ export default function Overview() {
                   : "No vehicles found in this category."}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {filteredVehicles.map((item) => {
                   const status = getResourceStatus(item);
                   const isMaintenance = status === "maintenance";

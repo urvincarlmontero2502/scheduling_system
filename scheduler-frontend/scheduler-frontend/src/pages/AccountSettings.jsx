@@ -96,7 +96,7 @@ export default function AccountSettings() {
       const updatedUser = res.data;
       // Update context with new user data
       localStorage.setItem("auth_user", JSON.stringify(updatedUser));
-      refreshUser();
+      await refreshUser();
       setOriginalData({ ...formData });
       setSuccess("Profile updated successfully!");
     } catch (err) {
@@ -144,7 +144,7 @@ export default function AccountSettings() {
       const res = await api.updateProfileImage(formData);
       setUploadSuccess("Profile picture updated successfully!");
       // Refresh the user data to get the new image URL
-      refreshUser();
+      await refreshUser();
     } catch (err) {
       console.error("Failed to upload profile image:", err);
       setUploadError(
@@ -196,7 +196,7 @@ export default function AccountSettings() {
         // Email changed instantly (fallback for non-verification flows)
         const updatedUser = response.user || response;
         localStorage.setItem("auth_user", JSON.stringify(updatedUser));
-        refreshUser();
+        await refreshUser();
         setFormData((prev) => ({ ...prev, email: updatedUser.email }));
         setOriginalData((prev) => ({ ...prev, email: updatedUser.email }));
         setEmailForm({
