@@ -523,7 +523,7 @@ export default function Bookings() {
         {/* Content Section */}
         {loading ? (
           viewMode === "card" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonBookingCard key={`skeleton-card-${i}`} />
               ))}
@@ -725,7 +725,7 @@ export default function Bookings() {
           </div>
         ) : (
           // Card View
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {filteredBookings.map((b) => {
               const bookingId = b.id || b.booking_id;
               const resourceName =
@@ -787,54 +787,56 @@ export default function Bookings() {
               return (
                 <div
                   key={bookingId}
-                  className="overflow-hidden rounded-xl border border-line bg-white p-4 shadow-sm hover:shadow-md transition flex flex-col"
+                  className="overflow-hidden rounded-xl border border-line bg-white shadow-sm flex flex-col"
                 >
                   {/* Resource + Status header */}
-                  <div className="flex justify-between items-start gap-2 mb-3">
+                  <div className="flex justify-between items-start gap-2 p-2.5">
                     <div className="flex-1 min-w-0">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">
+                      <span className="text-[9px] font-semibold uppercase tracking-wider text-steel">
                         Resource
                       </span>
-                      <h3 className="text-[15px] font-bold text-gray-900 leading-tight truncate">
+                      <h3 className="text-[13px] font-bold text-gray-900 leading-tight truncate">
                         {resourceName}
                       </h3>
                     </div>
-                    <StatusBadge status={b.status} />
+                    <div className="shrink-0">
+                      <StatusBadge status={b.status} />
+                    </div>
                   </div>
 
-                  {/* Prominent Date & Time chip */}
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 border border-blue-200 px-2.5 py-1 text-[12px] font-medium text-blue-800">
-                      <Calendar size={12} />
+                  {/* Date & Time chips */}
+                  <div className="px-2.5 mb-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-1 text-[10px] font-medium text-blue-800">
+                      <Calendar size={10} />
                       {dateValue}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-50 border border-purple-200 px-2.5 py-1 text-[12px] font-medium text-purple-800">
-                      <Clock size={12} />
+                    <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 border border-purple-200 px-2 py-1 text-[10px] font-medium text-purple-800">
+                      <Clock size={10} />
                       {timeValue}
                     </span>
                   </div>
 
                   {/* Details block */}
-                  <div className="space-y-2.5 rounded-md bg-gray-50 p-3 text-[13px] mb-4">
-                    <div className="flex items-center gap-2">
-                      <User size={14} className="shrink-0 text-gray-400" />
+                  <div className="space-y-1.5 rounded-md bg-gray-50 p-2.5 text-[11px] mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <User size={12} className="shrink-0 text-gray-400" />
                       <span>
-                        <strong className="text-gray-700">Full Name:</strong>{" "}
+                        <strong className="text-gray-700">Name:</strong>{" "}
                         {fullName}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <Building2
-                        size={14}
+                        size={12}
                         className="shrink-0 text-gray-400"
                       />
                       <span>
-                        <strong className="text-gray-700">Barangay:</strong>{" "}
+                        <strong className="text-gray-700">Brgy:</strong>{" "}
                         {barangayName}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Phone size={14} className="shrink-0 text-gray-400" />
+                    <div className="flex items-center gap-1.5">
+                      <Phone size={12} className="shrink-0 text-gray-400" />
                       <span className="font-mono">
                         <strong className="text-gray-700 font-sans">
                           Cell:
@@ -842,22 +844,12 @@ export default function Bookings() {
                         {cellNumber}
                       </span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <MapPin
-                        size={14}
-                        className="shrink-0 text-gray-400 mt-0.5"
-                      />
-                      <span>
-                        <strong className="text-gray-700">Address:</strong>{" "}
-                        {addressValue}
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-1.5">
                       <FileText
-                        size={14}
+                        size={12}
                         className="shrink-0 text-gray-400 mt-0.5"
                       />
-                      <span>
+                      <span className="line-clamp-2">
                         <strong className="text-gray-700">Purpose:</strong>{" "}
                         {purposeValue}
                       </span>
@@ -866,23 +858,23 @@ export default function Bookings() {
 
                   {/* Action Buttons */}
                   {canModerate && isPendingItem && (
-                    <div className="mt-auto flex gap-2">
+                    <div className="mt-auto flex gap-2 p-2 pt-0">
                       <button
                         onClick={() =>
                           handleStatusChange(bookingId, "approved")
                         }
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-emerald-700 transition"
+                        className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700 transition"
                       >
-                        <Check size={14} /> Approve
+                        <Check size={12} /> Approve
                       </button>
                       <button
                         onClick={() => {
                           setRejectBooking(b);
                           setRejectModalOpen(true);
                         }}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-100 transition"
+                        className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-100 transition"
                       >
-                        <X size={14} /> Reject
+                        <X size={12} /> Reject
                       </button>
                     </div>
                   )}

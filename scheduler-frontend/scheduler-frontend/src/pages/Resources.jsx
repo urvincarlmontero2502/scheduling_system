@@ -32,6 +32,13 @@ const STATUS_VARIANTS = {
   },
 };
 
+/** Format capacity with "pax" suffix, avoiding duplication */
+function formatCapacity(cap) {
+  if (!cap) return "N/A";
+  if (/\bpax$/i.test(cap)) return cap;
+  return `${cap} pax`;
+}
+
 /** Resolve the display status of a resource */
 function getResourceStatus(item) {
   if (item.is_maintenance || item.status === "maintenance") return "maintenance";
@@ -300,7 +307,7 @@ export default function Resources() {
         className="group flex flex-col h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
       >
         {/* Thumbnail with status badge overlay */}
-        <div className="relative h-24 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+        <div className="relative h-20 sm:h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
           {item.image ? (
             <img
               src={item.image}
@@ -310,23 +317,33 @@ export default function Resources() {
               }`}
             />
           ) : (
-            <div className={`flex flex-col items-center justify-center gap-2 text-steel ${
-              isMaintenance ? "opacity-60" : ""
-            }`}>
-              <div className={`rounded-lg p-3 ${
-                isMaintenance ? "bg-gray-100" : resourceType === "vehicle" ? "bg-amber-50 border border-amber-100" : "bg-blue-50 border border-blue-100"
-              }`}>
+            <div
+              className={`flex flex-col items-center justify-center gap-2 text-steel ${
+                isMaintenance ? "opacity-60" : ""
+              }`}
+            >
+              <div
+                className={`rounded-lg p-2.5 ${
+                  isMaintenance
+                    ? "bg-gray-100"
+                    : resourceType === "vehicle"
+                      ? "bg-amber-50 border border-amber-100"
+                      : "bg-blue-50 border border-blue-100"
+                }`}
+              >
                 {resourceType === "vehicle" ? (
-                  <Car size={28} className={`text-amber-400 ${
-                    isMaintenance ? "opacity-50" : ""
-                  }`} />
+                  <Car
+                    size={20}
+                    className={`text-amber-400 ${isMaintenance ? "opacity-50" : ""}`}
+                  />
                 ) : (
-                  <Building2 size={28} className={`text-blue-400 ${
-                    isMaintenance ? "opacity-50" : ""
-                  }`} />
+                  <Building2
+                    size={20}
+                    className={`text-blue-400 ${isMaintenance ? "opacity-50" : ""}`}
+                  />
                 )}
               </div>
-              <span className="text-[11px]">No image</span>
+              <span className="text-[10px]">No image</span>
             </div>
           )}
 
@@ -337,21 +354,21 @@ export default function Resources() {
 
           {/* Status badge overlay on thumbnail */}
           <span
-            className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusConfig.className}`}
+            className={`absolute top-1.5 right-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border ${statusConfig.className}`}
           >
             {statusConfig.label}
           </span>
         </div>
 
-        <div className="flex flex-col flex-1 p-4">
+        <div className="flex flex-col flex-1 p-2.5">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
+              <h3 className="text-[13px] font-semibold text-ink line-clamp-1">
                 {item.name}
               </h3>
               {isMaintenance && (
-                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-800">
-                  <Wrench size={10} /> Under Maintenance
+                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-orange-100 text-orange-800">
+                  <Wrench size={8} /> Under Maintenance
                 </span>
               )}
             </div>
@@ -362,7 +379,7 @@ export default function Resources() {
                   className="text-steel hover:text-brand transition p-1"
                   title="Edit Resource"
                 >
-                  <Edit2 size={15} />
+                  <Edit2 size={12} />
                 </button>
                 <button
                   onClick={() => handleMaintenanceToggle(item)}
@@ -377,60 +394,56 @@ export default function Resources() {
                       : "Mark as Under Maintenance"
                   }
                 >
-                  <Wrench size={15} />
+                  <Wrench size={12} />
                 </button>
                 <button
                   onClick={() => handleDelete(item.resource_id || item.id)}
                   className="text-steel hover:text-red-500 transition p-1"
                   title="Delete Resource"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={12} />
                 </button>
               </div>
             )}
           </div>
 
-          <p className="mt-2 text-[13px] text-steel">
+          <p className="mt-1.5 text-[11px] text-steel">
             {item.type === "vehicle" ? "Unit Details:" : "Capacity:"}{" "}
             <span className="font-medium text-ink">
-              {(() => {
-                const val = item.unit_name || item.capacity;
-                if (!val) return "N/A";
-                // For facilities, append " pax" only if not already present
-                if (item.type === "facility" && !/\bpax$/i.test(val)) {
-                  return `${val} pax`;
-                }
-                return val;
-              })()}
+              {item.type === "facility"
+                ? formatCapacity(item.capacity)
+                : item.unit_name || item.capacity
+                  ? `${item.unit_name || item.capacity}`
+                  : "N/A"}
             </span>
           </p>
-          <p className="mt-1 text-[12.5px] text-steel line-clamp-2">
+          <p className="mt-1 text-[10px] text-steel line-clamp-2">
             {item.description || "No description provided."}
           </p>
         </div>
 
         {/* Request Button Footer */}
-        <div className="p-4 pt-0 mt-auto">
+        <div className="p-2 pt-0 mt-auto">
           {isMaintenance ? (
             <button
               disabled
-              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-gray-200 text-gray-500 py-2 text-[12.5px] font-medium cursor-not-allowed opacity-60"
+              className="w-full flex items-center justify-center gap-1 rounded-md bg-gray-200 text-gray-500 py-1.5 text-[10px] font-medium cursor-not-allowed opacity-60"
             >
-              <Wrench size={14} /> Under Maintenance
+              <Wrench size={10} /> Under Maintenance
             </button>
           ) : isAdmin ? (
             <button
               onClick={() => handleOpenRequestModal(item, true)}
-              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-brand text-white hover:bg-brand-dark py-2 text-[12.5px] font-medium transition"
+              className="w-full flex items-center justify-center gap-1 rounded-md bg-brand text-white hover:bg-brand-dark py-1.5 text-[10px] font-medium transition"
             >
-              <Calendar size={14} /> Book Now
+              <Calendar size={10} /> Book
             </button>
           ) : (
             <button
               onClick={() => handleOpenRequestModal(item)}
-              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-brand-light text-brand hover:bg-brand hover:text-white py-2 text-[12.5px] font-medium transition"
+              className="w-full flex items-center justify-center gap-1 rounded-md bg-brand-light text-brand hover:bg-brand hover:text-white py-1.5 text-[10px] font-medium transition"
             >
-              <Calendar size={14} /> Request Use
+              <Calendar size={10} /> Request
             </button>
           )}
         </div>
@@ -522,7 +535,7 @@ export default function Resources() {
 
       {/* Resource Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonResourceCard key={`skeleton-${i}`} />
           ))}
@@ -540,7 +553,7 @@ export default function Resources() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {displayedItems.map(renderResourceCard)}
         </div>
       )}
