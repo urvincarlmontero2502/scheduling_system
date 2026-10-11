@@ -209,16 +209,18 @@ export default function DashboardLayout() {
                 isSigningOut ? "scale-95 opacity-60" : "scale-100 opacity-100"
               }`}
             >
-              {/* Icon badge */}
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600 p-3">
-                <LogOut size={24} />
+              {/* Header: icon + title side-by-side */}
+              <div className="mb-4 flex flex-row items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-50 p-2.5 text-rose-600">
+                  <LogOut size={20} />
+                </div>
+                <h2 className="text-[17px] font-semibold text-ink">
+                  Confirm Sign Out
+                </h2>
               </div>
 
-              {/* Content */}
-              <h2 className="text-[17px] font-semibold text-ink">
-                Confirm Sign Out
-              </h2>
-              <p className="mt-1.5 text-[13px] text-steel">
+              {/* Description */}
+              <p className="mt-0 text-[13px] text-steel">
                 Are you sure you want to end your current session?
               </p>
 
