@@ -73,8 +73,8 @@ export const resolveImageUrl = (imagePath, fullName, email, size = 64) => {
 // --- Bookings -----------------------------------------------------------
 export const fetchBookings = (params) => client.get("/bookings", { params });
 export const createBooking = (payload) => client.post("/bookings", payload);
-export const updateBookingStatus = (id, status) =>
-  client.patch(`/bookings/${id}/status`, { status });
+export const updateBookingStatus = (id, status, extra = {}) =>
+  client.patch(`/bookings/${id}/status`, { status, ...extra });
 
 // ⚡ ADD THIS MISSING FUNCTION:
 export const deleteBooking = (id) => client.delete(`/bookings/${id}`);

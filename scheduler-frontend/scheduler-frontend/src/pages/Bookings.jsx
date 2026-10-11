@@ -11,11 +11,17 @@ import {
   Clock,
   User,
   Trash2,
+  Search,
+  LayoutGrid,
+  Table2,
 } from "lucide-react";
 import * as api from "../api/endpoints";
 import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
-import { SkeletonBookingRow } from "../components/Skeleton";
+import {
+  SkeletonBookingCard,
+  SkeletonBookingTableRow,
+} from "../components/Skeleton";
 
 // Helper function to convert 24hr time (e.g., "17:00") to 12hr AM/PM format (e.g., "5:00 PM")
 function formatTimeTo12Hour(timeStr) {
@@ -26,18 +32,13 @@ function formatTimeTo12Hour(timeStr) {
   ) {
     return timeStr;
   }
-
   const [hourStr, minuteStr] = timeStr.split(":");
   let hours = parseInt(hourStr, 10);
-
   if (isNaN(hours)) return timeStr;
-
   const minutes = minuteStr ? minuteStr.slice(0, 2) : "00";
   const ampm = hours >= 12 ? "PM" : "AM";
-
   hours = hours % 12;
   hours = hours ? hours : 12;
-
   return `${hours}:${minutes} ${ampm}`;
 }
 
@@ -67,10 +68,8 @@ function hasTimeDateConflict(targetBooking, allBookings) {
   )
     .trim()
     .toLowerCase();
-
   const targetStart = targetBooking.start_date || targetBooking.date;
   const targetEnd = targetBooking.end_date || targetBooking.date || targetStart;
-
   if (!targetStart) return false;
 
   const targetStartTime =
@@ -79,12 +78,10 @@ function hasTimeDateConflict(targetBooking, allBookings) {
   const targetEndTime =
     targetBooking.end_time ||
     (targetBooking.time ? targetBooking.time.split("-")[1]?.trim() : null);
-
   const tStartMins = timeToMinutes(targetStartTime);
   const tEndMins = timeToMinutes(targetEndTime);
 
   for (const b of allBookings) {
-    // Skip self and non-approved bookings
     const bId = b.id || b.booking_id;
     const targetId = targetBooking.id || targetBooking.booking_id;
     if (bId === targetId) continue;
@@ -109,7 +106,6 @@ function hasTimeDateConflict(targetBooking, allBookings) {
         b.start_time || (b.time ? b.time.split("-")[0]?.trim() : null);
       const bEndTime =
         b.end_time || (b.time ? b.time.split("-")[1]?.trim() : null);
-
       const bStartMins = timeToMinutes(bStartTime);
       const bEndMins = timeToMinutes(bEndTime);
 
@@ -129,15 +125,64 @@ function hasTimeDateConflict(targetBooking, allBookings) {
       }
     }
   }
-
   return false;
+}
+
+// Reject modal component
+function RejectModal({ booking, onClose, onConfirm }) {
+  const [reason, setReason] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="border-b border-line px-5 py-4">
+          <h2 className="text-[16px] font-semibold text-ink">Reject Booking</h2>
+          <p className="text-[12px] text-steel mt-1">
+            Booking #{booking?.id || booking?.booking_id} — {booking?.resource || booking?.resource_name || "Resource"}
+          </p>
+        </div>
+        <div className="p-5">
+          <label className="block text-[12px] font-medium text-ink mb-1.5">
+            Reason for Rejection <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Schedule conflict, resource unavailable, incomplete details..."
+            className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-[13px] outline-none focus:border-rose-500 resize-none"
+            rows={3}
+            autoFocus
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-[13px] font-medium text-steel hover:bg-gray-50 rounded-lg border border-line"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(reason)}
+            disabled={!reason.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X size={14} /> Reject Booking
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Bookings() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("pending"); // Default to pending tab for quick moderation
+  const [activeTab, setActiveTab] = useState("pending");
+  const [viewMode, setViewMode] = useState("card"); // "card" or "table"
+  const [search, setSearch] = useState("");
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectBooking, setRejectBooking] = useState(null);
   const canModerate = user?.role === "admin";
 
   useEffect(() => {
@@ -155,8 +200,10 @@ export default function Bookings() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleStatusChange(id, status) {
-    const targetBooking = bookings.find((b) => (b.id || b.booking_id) === id);
+  async function handleStatusChange(id, status, reason = "") {
+    const targetBooking = bookings.find(
+      (b) => (b.id || b.booking_id) === id,
+    );
     const previousStatus = targetBooking?.status;
 
     // If attempting to approve, check for time and date conflicts
@@ -176,9 +223,12 @@ export default function Bookings() {
       ),
     );
     try {
-      await api.updateBookingStatus(id, status);
+      if (status === "rejected" && reason) {
+        await api.updateBookingStatus(id, status, { remarks: reason });
+      } else {
+        await api.updateBookingStatus(id, status);
+      }
     } catch (err) {
-      // Put the old status back and explain what went wrong
       setBookings((prev) =>
         prev.map((b) =>
           b.id === id || b.booking_id === id
@@ -206,7 +256,7 @@ export default function Bookings() {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete all ${approvedCount} approved booking(s)? This action cannot be undone.`,
+      `Are you sure you want to delete all ${approvedBookings.length} approved booking(s)? This action cannot be undone.`,
     );
     if (!confirmed) return;
 
@@ -252,12 +302,54 @@ export default function Bookings() {
     (b) => (b.status || "").toLowerCase() === "rejected",
   ).length;
 
-  // Filter bookings based on selected tab
+  // Helper to normalize the rejection handler — accepts (id, status) or (id, status, reason)
+  const safeReject = (id, reason) => {
+    handleStatusChange(id, "rejected", reason);
+  };
+
+  // Apply tab + search + barangay filtering
   const filteredBookings = requests.filter((b) => {
     const status = (b.status || "").toLowerCase();
-    if (activeTab === "all") return true;
-    return status === activeTab;
+    if (activeTab === "all") {
+      /* show all */
+    } else if (status !== activeTab) {
+      return false;
+    }
+
+    const searchText = search.toLowerCase();
+    if (searchText) {
+      const resource =
+        b.resource || b.resource_name || b.item_name || "";
+      const fullName =
+        b.full_name || b.requester || b.user_name || b.user?.full_name || "";
+      const purpose = b.purpose || b.reason || b.description || "";
+      const bookingId = b.id || b.booking_id || "";
+      const combined = `${resource} ${fullName} ${purpose} ${bookingId}`.toLowerCase();
+      if (!combined.includes(searchText)) return false;
+    }
+
+    const barangayName =
+      b.barangay || b.user?.barangay || b.user?.name || b.name || "";
+    if (barangayFilter !== "all" && barangayName !== barangayFilter) {
+      return false;
+    }
+
+    return true;
   });
+
+  // Distinct barangay list for filter dropdown
+  const barangayOptions = Array.from(
+    new Set(
+      requests.map(
+        (b) =>
+          b.barangay ||
+          b.user?.barangay ||
+          b.user?.name ||
+          b.name ||
+          "Poblacion",
+      ),
+    ),
+  ).sort();
 
   const getEmptyMessage = () => {
     switch (activeTab) {
@@ -282,70 +374,132 @@ export default function Bookings() {
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-6">
-        {/* Tab Buttons Navigation & Actions */}
+        {/* Search & Barangay Filter Bar */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full md:w-64">
+            <Search
+              size={17}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Search by resource, applicant, purpose..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-line bg-white py-2.5 pl-9 pr-3 text-[13px] outline-none focus:border-brand"
+            />
+          </div>
+
+          <select
+            value={barangayFilter}
+            onChange={(e) => setBarangayFilter(e.target.value)}
+            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-brand"
+          >
+            <option value="all">All Barangays</option>
+            {barangayOptions.map((bg) => (
+              <option key={bg} value={bg}>
+                {bg}
+              </option>
+            ))}
+          </select>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-[12px] text-steel">View:</span>
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-line">
+              <button
+                onClick={() => setViewMode("card")}
+                className={`p-1.5 rounded transition text-sm font-medium ${
+                  viewMode === "card"
+                    ? "bg-white shadow border border-line text-ink"
+                    : "text-steel hover:text-ink"
+                }`}
+                title="Card View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded transition text-sm font-medium ${
+                  viewMode === "table"
+                    ? "bg-white shadow border border-line text-ink"
+                    : "text-steel hover:text-ink"
+                }`}
+                title="Table View"
+              >
+                <Table2 size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-lg bg-gray-100 p-1 border border-line">
             <button
               onClick={() => setActiveTab("pending")}
               className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "pending"
                   ? "bg-amber-500 text-white shadow-sm"
-                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-              }`}>
+                  : "text-steel hover:text-ink"
+              }`}
+            >
               Pending
               <span
                 className={`px-2 py-0.5 text-xs rounded-full ${
                   activeTab === "pending"
                     ? "bg-amber-600 text-white"
                     : "bg-amber-100 text-amber-800"
-                }`}>
+                }`}
+              >
                 {pendingCount}
               </span>
             </button>
-
             <button
               onClick={() => setActiveTab("approved")}
               className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "approved"
                   ? "bg-emerald-600 text-white shadow-sm"
-                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-              }`}>
+                  : "text-steel hover:text-ink"
+              }`}
+            >
               Approved
               <span
                 className={`px-2 py-0.5 text-xs rounded-full ${
                   activeTab === "approved"
                     ? "bg-emerald-700 text-white"
                     : "bg-emerald-100 text-emerald-800"
-                }`}>
+                }`}
+              >
                 {approvedCount}
               </span>
             </button>
-
             <button
               onClick={() => setActiveTab("rejected")}
               className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "rejected"
                   ? "bg-rose-600 text-white shadow-sm"
-                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-              }`}>
+                  : "text-steel hover:text-ink"
+              }`}
+            >
               Rejected
               <span
                 className={`px-2 py-0.5 text-xs rounded-full ${
                   activeTab === "rejected"
                     ? "bg-rose-700 text-white"
                     : "bg-rose-100 text-rose-800"
-                }`}>
+                }`}
+              >
                 {rejectedCount}
               </span>
             </button>
-
             <button
               onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
+              className={`flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition ${
                 activeTab === "all"
                   ? "bg-gray-800 text-white shadow-sm"
-                  : "bg-gray-100 text-steel hover:bg-gray-200 hover:text-gray-900"
-              }`}>
+                  : "text-steel hover:text-ink"
+              }`}
+            >
               All ({requests.length})
             </button>
           </div>
@@ -353,53 +507,242 @@ export default function Bookings() {
           {canModerate && approvedCount > 0 && (
             <button
               onClick={handleDeleteAllApproved}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium rounded-lg text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition shadow-sm">
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium rounded-lg text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition shadow-sm"
+            >
               <Trash2 size={14} /> Delete All Approved ({approvedCount})
             </button>
           )}
         </div>
 
-        {/* Bookings Grid Section */}
+        {/* Content Section */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <SkeletonBookingRow key={`skeleton-${i}`} />
-            ))}
-          </div>
+          viewMode === "card" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonBookingCard key={`skeleton-card-${i}`} />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-line bg-white">
+              <table className="w-full min-w-[900px]">
+                <thead className="border-b border-line bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Resource
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Applicant
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Barangay
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Contact
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Date & Time
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Purpose
+                    </th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right text-[12px] font-semibold text-steel">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonBookingTableRow key={`skeleton-row-${i}`} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : filteredBookings.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-line rounded-xl bg-gray-50/50">
             <p className="text-[14px] text-steel italic">{getEmptyMessage()}</p>
           </div>
+        ) : viewMode === "table" ? (
+          <div className="overflow-x-auto rounded-xl border border-line bg-white shadow-sm">
+            <table className="w-full min-w-[900px]">
+              <thead className="border-b border-line bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Resource
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Applicant
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Barangay
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Contact
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Date & Time
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Purpose
+                  </th>
+                  <th className="px-4 py-3 text-left text-[12px] font-semibold text-steel">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-right text-[12px] font-semibold text-steel">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {filteredBookings.map((b) => {
+                  const bookingId = b.id || b.booking_id;
+                  const resourceName =
+                    b.resource || b.resource_name || b.item_name || "Resource";
+                  const barangayName =
+                    b.barangay ||
+                    b.user?.barangay ||
+                    b.user?.name ||
+                    b.name ||
+                    "Poblacion";
+                  const fullName =
+                    b.full_name ||
+                    b.requester ||
+                    b.user_name ||
+                    b.user?.full_name ||
+                    "Unknown Requestor";
+                  const cellNumber =
+                    b.cell_number || b.contact || b.phone || "N/A";
+                  const purposeValue =
+                    b.purpose ||
+                    b.reason ||
+                    b.description ||
+                    b.details ||
+                    "No purpose provided";
+
+                  const startDate = b.start_date || b.date;
+                  const endDate = b.end_date || b.date;
+                  const dateValue =
+                    startDate && endDate && startDate !== endDate
+                      ? `${startDate} to ${endDate}`
+                      : startDate || "—";
+
+                  let timeValue = "All Day";
+                  if (b.start_time && b.end_time) {
+                    timeValue = `${formatTimeTo12Hour(b.start_time)} - ${formatTimeTo12Hour(b.end_time)}`;
+                  } else if (b.start_time) {
+                    timeValue = formatTimeTo12Hour(b.start_time);
+                  } else if (b.time) {
+                    const parts = b.time.split("-");
+                    if (parts.length === 2) {
+                      timeValue = `${formatTimeTo12Hour(parts[0].trim())} - ${formatTimeTo12Hour(parts[1].trim())}`;
+                    } else {
+                      timeValue = formatTimeTo12Hour(b.time);
+                    }
+                  }
+
+                  const isPendingItem =
+                    (b.status || "").toLowerCase() === "pending";
+
+                  return (
+                    <tr key={bookingId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-[13px] font-medium text-ink">
+                        {resourceName}
+                      </td>
+                      <td className="px-4 py-3 text-[13px]">{fullName}</td>
+                      <td className="px-4 py-3 text-[13px] text-steel">
+                        {barangayName}
+                      </td>
+                      <td className="px-4 py-3 text-[13px] text-steel">
+                        {cellNumber}
+                      </td>
+                      <td className="px-4 py-3 text-[13px]">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={13} className="text-gray-400" />
+                          <span>{dateValue}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-steel mt-1 font-mono text-[12px]">
+                          <Clock size={13} className="text-gray-400" />
+                          <span>{timeValue}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-[13px] text-steel max-w-[200px] truncate">
+                        {purposeValue}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={b.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1.5">
+                          {canModerate && isPendingItem && (
+                            <>
+                              <button
+                                onClick={() =>
+                                  handleStatusChange(bookingId, "approved")
+                                }
+                                className="flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-emerald-700 transition"
+                                title="Approve"
+                              >
+                                <Check size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectBooking(b);
+                                  setRejectModalOpen(true);
+                                }}
+                                className="flex items-center justify-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-[12px] font-medium text-rose-600 hover:bg-rose-100 transition"
+                                title="Reject"
+                              >
+                                <X size={12} /> Reject
+                              </button>
+                            </>
+                          )}
+                          {!canModerate && (
+                            <button
+                              onClick={() => {}}
+                              className="flex items-center justify-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-steel hover:bg-gray-50 transition"
+                              title="View"
+                            >
+                              <FileText size={12} /> View
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
+          // Card View
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredBookings.map((b) => {
               const bookingId = b.id || b.booking_id;
               const resourceName =
                 b.resource || b.resource_name || b.item_name || "Resource";
-
               const barangayName =
                 b.barangay ||
                 b.user?.barangay ||
                 b.user?.name ||
                 b.name ||
                 "Poblacion";
-
               const fullName =
                 b.full_name ||
                 b.requester ||
                 b.user_name ||
                 b.user?.full_name ||
                 "Unknown Requestor";
-
-              const cellNumber = b.cell_number || b.contact || b.phone || "N/A";
-
+              const cellNumber =
+                b.cell_number || b.contact || b.phone || "N/A";
               const addressValue =
                 b.where_do_you_live ||
                 b.address ||
                 b.location ||
                 b.user_address ||
                 "N/A";
-
               const purposeValue =
                 b.purpose ||
                 b.reason ||
@@ -409,10 +752,12 @@ export default function Bookings() {
 
               const startDate = b.start_date || b.date;
               const endDate = b.end_date || b.date;
-              const dateValue =
-                startDate && endDate && startDate !== endDate
-                  ? `${startDate} to ${endDate}`
-                  : startDate || "—";
+              let dateValue = "—";
+              if (startDate && endDate && startDate !== endDate) {
+                dateValue = `${startDate} to ${endDate}`;
+              } else if (startDate) {
+                dateValue = startDate;
+              }
 
               let timeValue = "All Day";
               if (b.start_time && b.end_time) {
@@ -434,112 +779,126 @@ export default function Bookings() {
               return (
                 <div
                   key={bookingId}
-                  className="flex flex-col justify-between border border-line rounded-lg bg-white p-4 shadow-sm hover:shadow-md transition">
-                  <div>
-                    <div className="flex justify-between items-start gap-2 mb-3">
-                      <div>
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">
-                          Resource
-                        </span>
-                        <h3 className="text-[15px] font-bold text-gray-900 leading-tight">
-                          {resourceName}
-                        </h3>
-                      </div>
-                      <StatusBadge status={b.status} />
+                  className="overflow-hidden rounded-xl border border-line bg-white p-4 shadow-sm hover:shadow-md transition flex flex-col"
+                >
+                  {/* Resource + Status header */}
+                  <div className="flex justify-between items-start gap-2 mb-3">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-steel">
+                        Resource
+                      </span>
+                      <h3 className="text-[15px] font-bold text-gray-900 leading-tight truncate">
+                        {resourceName}
+                      </h3>
                     </div>
+                    <StatusBadge status={b.status} />
+                  </div>
 
-                    {/* Details block */}
-                    <div className="space-y-2 rounded-md bg-gray-50 p-3 text-[13px] text-steel mb-4">
-                      <div className="flex items-center gap-2">
-                        <Building2
-                          size={14}
-                          className="shrink-0 text-gray-400"
-                        />
-                        <span>
-                          <strong className="text-gray-700">Barangay:</strong>{" "}
-                          {barangayName}
-                        </span>
-                      </div>
+                  {/* Prominent Date & Time chip */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 border border-blue-200 px-2.5 py-1 text-[12px] font-medium text-blue-800">
+                      <Calendar size={12} />
+                      {dateValue}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-50 border border-purple-200 px-2.5 py-1 text-[12px] font-medium text-purple-800">
+                      <Clock size={12} />
+                      {timeValue}
+                    </span>
+                  </div>
 
-                      <div className="flex items-center gap-2">
-                        <User size={14} className="shrink-0 text-gray-400" />
-                        <span>
-                          <strong className="text-gray-700">Full Name:</strong>{" "}
-                          {fullName}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Phone size={14} className="shrink-0 text-gray-400" />
-                        <span className="font-mono">
-                          <strong className="text-gray-700 font-sans">
-                            Cell Number:
-                          </strong>{" "}
-                          {cellNumber}
-                        </span>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <MapPin
-                          size={14}
-                          className="shrink-0 text-gray-400 mt-0.5"
-                        />
-                        <span>
-                          <strong className="text-gray-700">Address:</strong>{" "}
-                          {addressValue}
-                        </span>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <FileText
-                          size={14}
-                          className="shrink-0 text-gray-400 mt-0.5"
-                        />
-                        <span>
-                          <strong className="text-gray-700">Purpose:</strong>{" "}
-                          {purposeValue}
-                        </span>
-                      </div>
+                  {/* Details block */}
+                  <div className="space-y-2.5 rounded-md bg-gray-50 p-3 text-[13px] mb-4">
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="shrink-0 text-gray-400" />
+                      <span>
+                        <strong className="text-gray-700">Full Name:</strong>{" "}
+                        {fullName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Building2
+                        size={14}
+                        className="shrink-0 text-gray-400"
+                      />
+                      <span>
+                        <strong className="text-gray-700">Barangay:</strong>{" "}
+                        {barangayName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone size={14} className="shrink-0 text-gray-400" />
+                      <span className="font-mono">
+                        <strong className="text-gray-700 font-sans">
+                          Cell:
+                        </strong>{" "}
+                        {cellNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <MapPin
+                        size={14}
+                        className="shrink-0 text-gray-400 mt-0.5"
+                      />
+                      <span>
+                        <strong className="text-gray-700">Address:</strong>{" "}
+                        {addressValue}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <FileText
+                        size={14}
+                        className="shrink-0 text-gray-400 mt-0.5"
+                      />
+                      <span>
+                        <strong className="text-gray-700">Purpose:</strong>{" "}
+                        {purposeValue}
+                      </span>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="border-t border-line pt-3 mb-3 text-[12.5px] font-mono text-steel space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar size={13} className="text-gray-400" />
-                        <span>{dateValue}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={13} className="text-gray-400" />
-                        <span>{timeValue}</span>
-                      </div>
+                  {/* Action Buttons */}
+                  {canModerate && isPendingItem && (
+                    <div className="mt-auto flex gap-2">
+                      <button
+                        onClick={() =>
+                          handleStatusChange(bookingId, "approved")
+                        }
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-emerald-700 transition"
+                      >
+                        <Check size={14} /> Approve
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRejectBooking(b);
+                          setRejectModalOpen(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-100 transition"
+                      >
+                        <X size={14} /> Reject
+                      </button>
                     </div>
-
-                    {canModerate && isPendingItem && (
-                      <div className="flex gap-2 pt-2 border-t border-line">
-                        <button
-                          onClick={() =>
-                            handleStatusChange(bookingId, "approved")
-                          }
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded border border-status-approved bg-status-approvedBg py-1.5 text-[13px] font-medium text-status-approved hover:bg-emerald-50 transition">
-                          <Check size={14} /> Approve
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleStatusChange(bookingId, "rejected")
-                          }
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded border border-status-rejected bg-status-rejectedBg py-1.5 text-[13px] font-medium text-status-rejected hover:bg-rose-50 transition">
-                          <X size={14} /> Reject
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </div>
-    </div>
-  );
+
+      {/* Reject Modal */}
+      {rejectModalOpen && rejectBooking && (
+        <RejectModal
+          booking={rejectBooking}
+          onClose={() => {
+            setRejectModalOpen(false);
+            setRejectBooking(null);
+          }}
+          onConfirm={(reason) => {
+            safeReject(rejectBooking.id || rejectBooking.booking_id, reason);
+            setRejectModalOpen(false);
+            setRejectBooking(null);
+          }}
+        />
+      )}</div>
+    );
 }

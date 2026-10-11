@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Building2, Car, Clock, CheckCircle2 } from "lucide-react";
 import * as api from "../api/endpoints";
+import { SkeletonStatCard } from "../components/Skeleton";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ pending: 0, approvedWeekly: 0 });
@@ -36,51 +37,59 @@ export default function Dashboard() {
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-6">
-        {/* Stat Cards Grid matching your dashboard design */}
+        {/* Stat Cards Grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Pending Requests */}
-          <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-[28px] font-bold text-black">
-                {loading ? "..." : stats.pending || 0}
-              </span>
-              <Clock size={20} className="text-steel" />
-            </div>
-            <p className="text-[13px] text-steel mt-2">Pending requests</p>
-          </div>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonStatCard key={`stat-skeleton-${i}`} />
+            ))
+          ) : (
+            <>
+              {/* Pending Requests */}
+              <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[28px] font-bold text-black">
+                    {stats.pending || 0}
+                  </span>
+                  <Clock size={20} className="text-steel" />
+                </div>
+                <p className="text-[13px] text-steel mt-2">Pending requests</p>
+              </div>
 
-          {/* Approved This Week */}
-          <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-[28px] font-bold text-black">
-                {loading ? "..." : stats.approvedWeekly || 0}
-              </span>
-              <CheckCircle2 size={20} className="text-steel" />
-            </div>
-            <p className="text-[13px] text-steel mt-2">Approved this week</p>
-          </div>
+              {/* Approved This Week */}
+              <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[28px] font-bold text-black">
+                    {stats.approvedWeekly || 0}
+                  </span>
+                  <CheckCircle2 size={20} className="text-steel" />
+                </div>
+                <p className="text-[13px] text-steel mt-2">Approved this week</p>
+              </div>
 
-          {/* Facilities Count */}
-          <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-[28px] font-bold text-black">
-                {loading ? "..." : facilitiesCount}
-              </span>
-              <Building2 size={20} className="text-steel" />
-            </div>
-            <p className="text-[13px] text-steel mt-2">Active facilities</p>
-          </div>
+              {/* Facilities Count */}
+              <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[28px] font-bold text-black">
+                    {facilitiesCount}
+                  </span>
+                  <Building2 size={20} className="text-steel" />
+                </div>
+                <p className="text-[13px] text-steel mt-2">Active facilities</p>
+              </div>
 
-          {/* Vehicles Count */}
-          <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-[28px] font-bold text-black">
-                {loading ? "..." : vehiclesCount}
-              </span>
-              <Car size={20} className="text-steel" />
-            </div>
-            <p className="text-[13px] text-steel mt-2">Active vehicles</p>
-          </div>
+              {/* Vehicles Count */}
+              <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[28px] font-bold text-black">
+                    {vehiclesCount}
+                  </span>
+                  <Car size={20} className="text-steel" />
+                </div>
+                <p className="text-[13px] text-steel mt-2">Active vehicles</p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Getting Started Banner */}

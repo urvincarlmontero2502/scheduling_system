@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import * as api from "../api/endpoints";
 import StatusBadge from "../components/StatusBadge";
+import { Skeleton } from "../components/Skeleton";
 
 function formatTimeTo12Hour(timeStr) {
   if (!timeStr) return "";
@@ -92,6 +93,7 @@ function getTimeValue(booking) {
 
 export default function BookingHistory() {
   const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -114,10 +116,10 @@ export default function BookingHistory() {
           : Array.isArray(res)
             ? res
             : [];
-
         setBookings(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const historyBookings = bookings.filter((booking) => {
@@ -481,7 +483,27 @@ export default function BookingHistory() {
 
         {/* History Table */}
         <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-          {filteredBookings.length === 0 ? (
+          {loading ? (
+            <div className="animate-pulse">
+              {/* Table skeleton — header + rows */}
+              <div className="border-b border-line bg-gray-50 px-4 py-3 flex items-center gap-4">
+                <Skeleton className="h-3 w-8 bg-gray-200 rounded" />
+                <Skeleton className="h-3 w-16 bg-gray-200 rounded" />
+                <Skeleton className="h-3 w-20 bg-gray-200 rounded" />
+                <Skeleton className="h-3 w-16 bg-gray-200 rounded" />
+                <Skeleton className="h-3 w-12 bg-gray-200 rounded" />
+              </div>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={`skeleton-row-${i}`} className="border-b border-line px-4 py-4 flex items-center gap-4">
+                  <Skeleton className="h-3 w-12 bg-gray-200 rounded" />
+                  <Skeleton className="h-3 w-24 bg-gray-200 rounded" />
+                  <Skeleton className="h-3 w-28 bg-gray-200 rounded" />
+                  <Skeleton className="h-3 w-20 bg-gray-200 rounded" />
+                  <Skeleton className="h-5 w-16 bg-gray-200 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : filteredBookings.length === 0 ? (
             <div className="py-16 text-center">
               <FileText size={32} className="mx-auto mb-3 text-gray-300" />
 
