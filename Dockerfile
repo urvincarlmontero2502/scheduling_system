@@ -1,4 +1,5 @@
 FROM php:8.4-apache
+# Build cache invalidation: 1791693235
 
 RUN apt-get update && apt-get install -y \
     libpng-dev \
