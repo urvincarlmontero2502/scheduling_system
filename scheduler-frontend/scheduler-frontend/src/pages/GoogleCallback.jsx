@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import * as api from "../api/endpoints";
 import { useAuth } from "../context/AuthContext";
@@ -13,7 +13,14 @@ export default function GoogleCallback() {
     "Completing Google authentication..."
   );
 
+  // Guard against double invocation — authorization codes are single-use.
+  // React 18 StrictMode and re-renders can cause the effect to fire twice.
+  const hasAttempted = useRef(false);
+
   useEffect(() => {
+    if (hasAttempted.current) return;
+    hasAttempted.current = true;
+
     const code = searchParams.get("code");
     const error = searchParams.get("error");
 
@@ -77,9 +84,12 @@ export default function GoogleCallback() {
         );
         if (err.response?.data?.error_detail) {
           console.error("Error details:", err.response.data.error_detail);
+          setMessage(
+            `${err.response?.data?.message || "Google authentication failed."}\nDetails: ${err.response.data.error_detail}`
+          );
         }
         localStorage.setItem("google_auth_success", "false");
-        setTimeout(() => navigate("/login"), 3000);
+        setTimeout(() => navigate("/login"), 5000);
       });
   }, [searchParams, navigate, refreshUser]);
 
@@ -119,7 +129,7 @@ export default function GoogleCallback() {
               <h2 className="text-[18px] font-semibold text-ink">
                 Authentication Failed
               </h2>
-              <p className="text-[13px] text-steel">{message}</p>
+              <p className="text-[13px] text-steel whitespace-pre-wrap">{message}</p>
             </>
           )}
         </div>
