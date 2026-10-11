@@ -14,7 +14,6 @@ import { useAuth } from "../context/AuthContext";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import { SkeletonResourceCard } from "../components/Skeleton";
-import Skeleton from "../components/Skeleton";
 
 /** Status badge configuration */
 const STATUS_VARIANTS = {
@@ -27,8 +26,8 @@ const STATUS_VARIANTS = {
     className: "bg-amber-50 text-amber-700 border-amber-200",
   },
   maintenance: {
-    label: "Maintenance",
-    className: "bg-orange-50 text-orange-700 border-orange-200",
+    label: "🟡 Maintenance",
+    className: "bg-yellow-50 text-yellow-800 border-yellow-200",
   },
 };
 
@@ -46,7 +45,6 @@ export default function Resources() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [showMaintenanceOnly, setShowMaintenanceOnly] = useState(false);
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -248,7 +246,7 @@ export default function Resources() {
     );
   };
 
-  // Compute filtered resources based on active filter + maintenance toggle
+  // Compute filtered resources based on active filter
   const allVehicles = resources.filter(
     (item) => item.type === "vehicle" && matchesSearch(item),
   );
@@ -265,30 +263,28 @@ export default function Resources() {
   let displayedItems = [];
   let displayedCount = 0;
 
-  if (showMaintenanceOnly) {
-    displayedItems = maintenanceItems;
-    displayedCount = maintenanceItems.length;
-  } else {
-    switch (activeFilter) {
-      case "vehicle":
-        displayedItems = allVehicles;
-        displayedCount = allVehicles.length;
-        break;
-      case "facility":
-        displayedItems = allFacilities;
-        displayedCount = allFacilities.length;
-        break;
-      case "all":
-      default:
-        displayedItems = resources.filter(matchesSearch);
-        displayedCount = resources.filter(matchesSearch).length;
-        break;
-    }
+  switch (activeFilter) {
+    case "maintenance":
+      displayedItems = maintenanceItems;
+      displayedCount = maintenanceItems.length;
+      break;
+    case "vehicle":
+      displayedItems = allVehicles;
+      displayedCount = allVehicles.length;
+      break;
+    case "facility":
+      displayedItems = allFacilities;
+      displayedCount = allFacilities.length;
+      break;
+    case "all":
+    default:
+      displayedItems = resources.filter(matchesSearch);
+      displayedCount = resources.filter(matchesSearch).length;
+      break;
   }
 
   const handleTabClick = (tab) => {
     setActiveFilter(tab);
-    setShowMaintenanceOnly(false);
   };
 
   const renderResourceCard = (item) => {
@@ -308,19 +304,32 @@ export default function Resources() {
             <img
               src={item.image}
               alt={item.name}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              className={`h-full w-full object-cover transition-transform group-hover:scale-105 ${
+                isMaintenance ? "grayscale opacity-60" : ""
+              }`}
             />
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 text-steel">
-              <div className="rounded-lg bg-gray-50 p-3">
+              <div className={`rounded-lg p-3 ${
+                isMaintenance ? "bg-gray-100" : "bg-gray-50"
+              }`}>
                 {resourceType === "vehicle" ? (
-                  <Car size={32} className="text-gray-400" />
+                  <Car size={32} className={`text-gray-400 ${
+                    isMaintenance ? "opacity-50" : ""
+                  }`} />
                 ) : (
-                  <Building2 size={32} className="text-gray-400" />
+                  <Building2 size={32} className={`text-gray-400 ${
+                    isMaintenance ? "opacity-50" : ""
+                  }`} />
                 )}
               </div>
               <span className="text-[11px]">No image</span>
             </div>
+          )}
+
+          {/* Desaturation overlay for maintenance items */}
+          {isMaintenance && (
+            <div className="absolute inset-0 bg-yellow-100/30" />
           )}
 
           {/* Status badge overlay on thumbnail */}
@@ -391,7 +400,14 @@ export default function Resources() {
 
         {/* Request Button Footer */}
         <div className="p-4 pt-0 mt-auto">
-          {isAdmin ? (
+          {isMaintenance ? (
+            <button
+              disabled
+              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-gray-200 text-gray-500 py-2 text-[12.5px] font-medium cursor-not-allowed opacity-60"
+            >
+              <Wrench size={14} /> Under Maintenance
+            </button>
+          ) : isAdmin ? (
             <button
               onClick={() => handleOpenRequestModal(item, true)}
               className="w-full flex items-center justify-center gap-1.5 rounded-md bg-brand text-white hover:bg-brand-dark py-2 text-[12.5px] font-medium transition"
@@ -449,31 +465,6 @@ export default function Resources() {
         )}
       </div>
 
-      {/* Maintenance Toggle (Admin only) */}
-      {isAdmin && maintenanceItems.length > 0 && (
-        <div className="mb-4 flex items-center gap-3">
-          <button
-            onClick={() => setShowMaintenanceOnly(!showMaintenanceOnly)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition ${
-              showMaintenanceOnly
-                ? "bg-orange-100 text-orange-800 border border-orange-200"
-                : "bg-gray-100 text-steel hover:bg-gray-200 border border-line"
-            }`}
-          >
-            <Wrench size={13} />
-            Under Maintenance ({maintenanceItems.length})
-          </button>
-          {showMaintenanceOnly && (
-            <button
-              onClick={() => setShowMaintenanceOnly(false)}
-              className="text-[12px] text-steel hover:text-ink underline"
-            >
-              Show All
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Segmented Control / Tab Filter */}
       <div className="mb-6 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 border border-line">
         <button
@@ -505,6 +496,16 @@ export default function Resources() {
           }`}
         >
           <Building2 size={15} /> Facilities ({allFacilities.length})
+        </button>
+        <button
+          onClick={() => handleTabClick("maintenance")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-medium transition ${
+            activeFilter === "maintenance"
+              ? "bg-white text-yellow-800 shadow-sm border border-yellow-200"
+              : "text-steel hover:text-ink"
+          }`}
+        >
+          🟡 In Maintenance ({maintenanceItems.length})
         </button>
       </div>
 
