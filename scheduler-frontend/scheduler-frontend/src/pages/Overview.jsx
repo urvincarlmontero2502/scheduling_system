@@ -567,7 +567,9 @@ export default function Overview() {
                       <p className="mt-2 text-[13px] text-steel">
                         Unit Details:{" "}
                         <span className="font-medium text-ink">
-                          {item.unit_name || item.capacity || "—"}
+                          {item.unit_name || item.capacity
+                            ? `${item.unit_name || item.capacity}`
+                            : "N/A"}
                         </span>
                       </p>
                       <p className="mt-1 text-[12.5px] text-steel truncate">

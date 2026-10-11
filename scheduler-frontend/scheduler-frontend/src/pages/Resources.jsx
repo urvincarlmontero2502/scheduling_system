@@ -10,6 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import * as api from "../api/endpoints";
+import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import FacilityBookingModal from "../components/FacilityBookingModal";
@@ -219,7 +220,7 @@ export default function Resources() {
     }
 
     const request = editingResource
-      ? api.client.post(`/resources/${editingResource.resource_id || editingResource.id}`, data)
+      ? client.post(`/resources/${editingResource.resource_id || editingResource.id}`, data)
       : api.createResource(data);
 
     request
