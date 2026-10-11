@@ -57,6 +57,7 @@ Route::post('/verify-email-change', [AuthController::class, 'verifyEmailChange']
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::post('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])
     ->middleware('throttle:10,1'); // 10 attempts per minute
+Route::post('/auth/google/complete-registration', [AuthController::class, 'completeGoogleRegistration']);
 
 // Diagnostic endpoint to check database schema
 Route::get('/diagnostics/oauth-schema', function () {

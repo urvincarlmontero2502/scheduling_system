@@ -406,7 +406,15 @@ class AuthController extends Controller
     }
 
     /**
-     * Handle the Google OAuth callback.
+     * Handle the Google OAuth callback — two-step registration flow.
+     *
+     * Step 1: Authenticate with Google and check if the user exists.
+     *   - If user exists → issue token and log them in.
+     *   - If user doesn't exist → create a temporary token with their Google
+     *     profile data and return it. The frontend will redirect to
+     *     /register/barangay to collect their barangay selection.
+     *
+     * Step 2 is handled by completeGoogleRegistration().
      */
     public function handleGoogleCallback(Request $request)
     {
@@ -469,7 +477,7 @@ class AuthController extends Controller
                 ], 400);
             }
 
-            // Check if user exists with Google ID (handle missing column gracefully)
+            // Check if user exists with Google ID
             try {
                 $user = User::where('google_id', $googleUserId)
                     ->whereNull('deleted_at')
@@ -494,6 +502,8 @@ class AuthController extends Controller
                     $user = User::where('email', $googleEmail)->first();
                 }
             }
+
+            // If user found by Google ID or email, link Google ID (if missing) and log in
             if ($user) {
                 // Link Google ID to existing user (if column exists)
                 try {
@@ -502,36 +512,8 @@ class AuthController extends Controller
                 } catch (\Exception $e) {
                     // Column doesn't exist — log but continue
                 }
-            }
 
-            // Create new user if not found (JIT automatic registration)
-            if (!$user) {
-                // Check which columns exist to avoid SQL errors
-                $columns = \DB::connection()
-                    ->select("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'");
-                $columnNames = array_map(fn($c) => $c->column_name, $columns);
-
-                $newUserData = [
-                    'full_name' => $googleName ?: explode('@', $googleEmail)[0],
-                    'email' => $googleEmail,
-                    'password_hash' => Hash::make(Str::random(24)), // Secure random placeholder
-                    'role' => 'staff', // Default role for Google-registered users
-                    // barangay is left null — user will select it in a follow-up step
-                ];
-
-                if (in_array('google_id', $columnNames)) {
-                    $newUserData['google_id'] = $googleUserId;
-                }
-                if (in_array('email_verified_at', $columnNames)) {
-                    $newUserData['email_verified_at'] = now(); // Google has already verified the email
-                }
-                if ($googleAvatar && in_array('avatar', $columnNames)) {
-                    $newUserData['avatar'] = $googleAvatar; // Store Google profile picture
-                }
-
-                $user = User::create($newUserData);
-
-                // Generate token for immediate access, but flag that barangay setup is needed
+                // Generate token and log them in
                 $expiresAt = now()->addDays(30);
                 $token = $user->createToken('spa-token', ['*'], $expiresAt)->plainTextToken;
 
@@ -539,20 +521,32 @@ class AuthController extends Controller
                     'token' => $token,
                     'user' => $user,
                     'expires_at' => $expiresAt->toDateTimeString(),
-                    'requires_barangay_setup' => true,
-                    'message' => 'Account created. Please select your barangay to continue.',
-                ], 201);
+                ]);
             }
 
-            // Generate API token with 30-day expiry
-            $expiresAt = now()->addDays(30);
-            $token = $user->createToken('spa-token', ['*'], $expiresAt)->plainTextToken;
+            // --- NEW USER: Two-step registration flow ---
+            // User doesn't exist — create a temporary token with their Google profile data
+            // and redirect them to barangay selection page.
+
+            $tempToken = \Illuminate\Support\Str::random(64);
+
+            DB::table('google_oauth_temp_tokens')->insert([
+                'token' => $tempToken,
+                'email' => $googleEmail,
+                'google_id' => $googleUserId,
+                'full_name' => $googleName ?: explode('@', $googleEmail)[0],
+                'avatar' => $googleAvatar,
+                'expires_at' => now()->addMinutes(15), // 15-minute expiry
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
             return response()->json([
-                'token' => $token,
-                'user' => $user,
-                'expires_at' => $expiresAt->toDateTimeString(),
-            ]);
+                'temporary_token' => $tempToken,
+                'message' => 'Account not found. Please select your barangay to complete registration.',
+                'requires_barangay_setup' => true,
+            ], 200);
+
         } catch (\Exception $e) {
             \Log::error('Google OAuth error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
@@ -560,6 +554,122 @@ class AuthController extends Controller
             ]);
             return response()->json([
                 'message' => 'Google authentication failed. Please try again.',
+                'error_detail' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Complete Google OAuth registration by creating the user with their
+     * selected barangay.
+     *
+     * Accepts the temporary token from handleGoogleCallback and the selected
+     * barangay, then creates the permanent user record and issues a Sanctum token.
+     */
+    public function completeGoogleRegistration(Request $request)
+    {
+        $validated = $request->validate([
+            'temporary_token' => ['required', 'string'],
+            'barangay' => ['required', 'string', 'max:255'],
+        ]);
+
+        // Look up the temporary token
+        $tempRecord = DB::table('google_oauth_temp_tokens')
+            ->where('token', $validated['temporary_token'])
+            ->first();
+
+        if (!$tempRecord) {
+            return response()->json([
+                'message' => 'Invalid or expired registration token. Please try signing in with Google again.',
+            ], 400);
+        }
+
+        // Check if the token has expired
+        $expiresAt = \Carbon\Carbon::parse($tempRecord->expires_at);
+        if ($expiresAt->isPast()) {
+            // Clean up expired token
+            DB::table('google_oauth_temp_tokens')
+                ->where('token', $validated['temporary_token'])
+                ->delete();
+
+            return response()->json([
+                'message' => 'This registration link has expired. Please try signing in with Google again.',
+            ], 400);
+        }
+
+        // Check if a user with this email already exists (race condition check)
+        $existingUser = User::where('email', $tempRecord->email)->first();
+        if ($existingUser) {
+            // Clean up temp token
+            DB::table('google_oauth_temp_tokens')
+                ->where('token', $validated['temporary_token'])
+                ->delete();
+
+            return response()->json([
+                'message' => 'An account with this email already exists. Please log in instead.',
+            ], 409);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check which columns exist to avoid SQL errors
+            $columns = DB::connection()
+                ->select("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'");
+            $columnNames = array_map(fn($c) => $c->column_name, $columns);
+
+            $newUserData = [
+                'full_name' => $tempRecord->full_name,
+                'email' => $tempRecord->email,
+                'password_hash' => Hash::make(Str::random(24)), // Secure random placeholder
+                'role' => 'staff',
+                'barangay' => $validated['barangay'], // User's selected barangay
+            ];
+
+            if (in_array('google_id', $columnNames)) {
+                $newUserData['google_id'] = $tempRecord->google_id;
+            }
+            if (in_array('email_verified_at', $columnNames)) {
+                $newUserData['email_verified_at'] = now(); // Google verified the email
+            }
+            if ($tempRecord->avatar && in_array('avatar', $columnNames)) {
+                $newUserData['avatar'] = $tempRecord->avatar;
+            }
+
+            $user = User::create($newUserData);
+
+            // Generate token for immediate access
+            $expiresAt = now()->addDays(30);
+            $token = $user->createToken('spa-token', ['*'], $expiresAt)->plainTextToken;
+
+            // Delete the temporary token
+            DB::table('google_oauth_temp_tokens')
+                ->where('token', $validated['temporary_token'])
+                ->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'token' => $token,
+                'user' => $user,
+                'expires_at' => $expiresAt->toDateTimeString(),
+                'message' => 'Account created successfully!',
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Clean up temp token on failure
+            DB::table('google_oauth_temp_tokens')
+                ->where('token', $validated['temporary_token'])
+                ->delete();
+
+            \Log::error('Google registration completion error: ' . $e->getMessage(), [
+                'email' => $tempRecord->email,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to create account. Please try again.',
                 'error_detail' => $e->getMessage(),
             ], 500);
         }

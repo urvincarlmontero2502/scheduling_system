@@ -35,21 +35,24 @@ export default function GoogleCallback() {
     api
       .googleCallback(code)
       .then((res) => {
-        const { token, user: signInUser, expires_at, requires_barangay_setup } = res.data;
-        localStorage.setItem("auth_token", token);
-        localStorage.setItem("auth_user", JSON.stringify(signInUser));
-        if (expires_at) {
-          localStorage.setItem("auth_expires_at", expires_at);
-        }
-        localStorage.setItem("google_auth_success", "true");
-
-        if (requires_barangay_setup) {
-          // New user created — redirect to barangay selection
+        if (res.data.temporary_token) {
+          // New user — redirect to two-step registration
+          localStorage.setItem(
+            "google_registration_token",
+            res.data.temporary_token
+          );
           setStatus("success");
-          setMessage("Account created! Please select your barangay to continue.");
-          setTimeout(() => navigate("/barangay-setup"), 1500);
+          setMessage("Google authenticated! Please select your barangay to continue.");
+          setTimeout(() => navigate("/register/barangay"), 1500);
         } else {
-          // Existing user — go to dashboard
+          // Existing user — full login
+          const { token, user: signInUser, expires_at } = res.data;
+          localStorage.setItem("auth_token", token);
+          localStorage.setItem("auth_user", JSON.stringify(signInUser));
+          if (expires_at) {
+            localStorage.setItem("auth_expires_at", expires_at);
+          }
+          localStorage.setItem("google_auth_success", "true");
           setStatus("success");
           setMessage("Successfully signed in with Google!");
           setTimeout(() => navigate("/"), 1500);

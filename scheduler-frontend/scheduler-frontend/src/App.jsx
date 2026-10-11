@@ -38,6 +38,7 @@ export default function App() {
           <Route path="/verify-email-change" element={<VerifyEmailChange />} />
           <Route path="/auth/google/callback" element={<GoogleCallback />} />
           <Route path="/barangay-setup" element={<BarangaySetup />} />
+          <Route path="/register/barangay" element={<BarangaySetup />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

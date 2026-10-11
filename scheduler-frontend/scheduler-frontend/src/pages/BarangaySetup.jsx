@@ -27,35 +27,42 @@ export default function BarangaySetup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Check auth + fetch barangays on mount (fallback to hardcoded list)
+  // For the registration flow, we need a temporary token, not a regular auth token
+  const registrationToken = localStorage.getItem("google_registration_token");
+  const hasAuthToken = localStorage.getItem("auth_token");
+
   useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
+    // If no auth token or registration token, redirect to login
+    if (!registrationToken && !hasAuthToken) {
       navigate("/login");
       return;
     }
 
-    api
-      .getBarangays()
-      .then((res) => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setBarangays(res.data.map((b) => b.name));
-        }
-      })
-      .catch(() => {
-        // Fallback: use hardcoded list (still works)
-      });
+    // Only fetch barangays and user data if we have a regular auth token
+    // (registration flow doesn't need these)
+    if (hasAuthToken) {
+      api
+        .getBarangays()
+        .then((res) => {
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            setBarangays(res.data.map((b) => b.name));
+          }
+        })
+        .catch(() => {
+          // Fallback: use hardcoded list
+        });
 
-    // Try to restore user's previously selected barangay
-    api
-      .fetchCurrentUser()
-      .then((userRes) => {
-        if (userRes.data.barangay) {
-          setSelectedBarangay(userRes.data.barangay);
-        }
-      })
-      .catch(() => {});
-  }, [navigate]);
+      // Try to restore user's previously selected barangay
+      api
+        .fetchCurrentUser()
+        .then((userRes) => {
+          if (userRes.data.barangay) {
+            setSelectedBarangay(userRes.data.barangay);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [navigate, registrationToken, hasAuthToken]);
 
   const handleSubmit = async () => {
     if (!selectedBarangay) {
@@ -67,8 +74,27 @@ export default function BarangaySetup() {
     setError("");
 
     try {
-      await api.updateUser({ barangay: selectedBarangay });
-      navigate("/");
+      if (registrationToken) {
+        // New user completing registration — call the complete-registration endpoint
+        const res = await api.completeGoogleRegistration(registrationToken, selectedBarangay);
+        const { token, user: signInUser, expires_at } = res.data;
+        
+        // Store auth token and user data
+        localStorage.setItem("auth_token", token);
+        localStorage.setItem("auth_user", JSON.stringify(signInUser));
+        if (expires_at) {
+          localStorage.setItem("auth_expires_at", expires_at);
+        }
+        localStorage.removeItem("google_registration_token");
+        localStorage.setItem("google_auth_success", "true");
+        
+        // Redirect to dashboard
+        navigate("/");
+      } else {
+        // Existing user updating their barangay
+        await api.updateUser({ barangay: selectedBarangay });
+        navigate("/");
+      }
     } catch (err) {
       setError(
         err.response?.data?.message ||
