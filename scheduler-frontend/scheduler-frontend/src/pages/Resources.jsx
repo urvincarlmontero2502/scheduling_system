@@ -393,9 +393,15 @@ export default function Resources() {
           <p className="mt-2 text-[13px] text-steel">
             {item.type === "vehicle" ? "Unit Details:" : "Capacity:"}{" "}
             <span className="font-medium text-ink">
-              {item.unit_name || item.capacity
-                ? `${item.unit_name || item.capacity}${item.type === "facility" && item.capacity ? " pax" : ""}`
-                : "N/A"}
+              {(() => {
+                const val = item.unit_name || item.capacity;
+                if (!val) return "N/A";
+                // For facilities, append " pax" only if not already present
+                if (item.type === "facility" && !/\bpax$/i.test(val)) {
+                  return `${val} pax`;
+                }
+                return val;
+              })()}
             </span>
           </p>
           <p className="mt-1 text-[12.5px] text-steel line-clamp-2">

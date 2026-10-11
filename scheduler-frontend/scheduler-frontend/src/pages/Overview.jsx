@@ -481,7 +481,13 @@ export default function Overview() {
                       <p className="mt-2 text-[13px] text-steel">
                         Capacity:{" "}
                         <span className="font-medium text-ink">
-                          {item.capacity ? `${item.capacity} pax` : "N/A"}
+                          {(() => {
+                            const cap = item.capacity;
+                            if (!cap) return "N/A";
+                            // Avoid duplicate "pax" suffix if already present
+                            if (/\bpax$/i.test(cap)) return cap;
+                            return `${cap} pax`;
+                          })()}
                         </span>
                       </p>
                       <p className="mt-1 text-[12.5px] text-steel truncate">
