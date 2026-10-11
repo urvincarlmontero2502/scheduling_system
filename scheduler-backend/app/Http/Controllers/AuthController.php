@@ -447,14 +447,21 @@ class AuthController extends Controller
                 'code' => $code,
             ]);
 
-            if ($tokenResponse->failed()) {
+            // Check for HTTP-level failure OR Google's error response in JSON body
+            // Google returns HTTP 200 with {"error": "..."} when the code is invalid/expired
+            $tokenBody = $tokenResponse->json();
+            if ($tokenResponse->failed() || isset($tokenBody['error'])) {
+                $errorMsg = $tokenBody['error'] ?? 'Unknown error';
+                $errorDesc = $tokenBody['error_description'] ?? $tokenResponse->body();
                 \Log::error('Google token exchange failed.', [
                     'status' => $tokenResponse->status(),
+                    'error' => $errorMsg,
+                    'error_description' => $tokenBody['error_description'] ?? null,
                     'body' => $tokenResponse->body(),
                 ]);
                 return response()->json([
                     'message' => 'Failed to obtain access token from Google.',
-                    'error_detail' => $tokenResponse->body(),
+                    'error_detail' => $errorDesc,
                 ], 400);
             }
 
