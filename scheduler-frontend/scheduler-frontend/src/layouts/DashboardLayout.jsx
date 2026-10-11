@@ -11,6 +11,7 @@ import {
   Settings,
   User,
   X,
+  Loader,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -38,6 +39,8 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Close the mobile menu when the page changes
   useEffect(() => {
@@ -56,9 +59,21 @@ export default function DashboardLayout() {
     };
   }, [open]);
 
-  async function handleSignOut() {
+  // Escape closes the sign-out modal
+  useEffect(() => {
+    if (!showSignOutModal) return;
+    const onKey = (e) => e.key === "Escape" && !signingOut && setShowSignOutModal(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showSignOutModal, signingOut]);
+
+  const requestSignOut = () => setShowSignOutModal(true);
+
+  async function confirmSignOut() {
+    setSigningOut(true);
     await signOut();
-    navigate("/login");
+    setShowSignOutModal(false);
+    navigate("/login", { replace: true });
   }
 
   const visibleItems = NAV_ITEMS.filter(
@@ -166,7 +181,7 @@ export default function DashboardLayout() {
 
           {/* Sign out button */}
           <button
-            onClick={handleSignOut}
+            onClick={requestSignOut}
             style={{ ...itemStyle, width: "100%", cursor: "pointer", border: "none", background: "transparent" }}
             className="text-steel transition hover:bg-paper hover:text-status-rejected">
             <LogOut size={20} />
@@ -174,6 +189,67 @@ export default function DashboardLayout() {
           </button>
         </div>
       </aside>
+
+      {/* Sign Out Confirmation Modal */}
+      {showSignOutModal && (
+        <>
+          {/* Backdrop with blur and fade-in */}
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-200"
+            onClick={() => !signingOut && setShowSignOutModal(false)}
+            aria-hidden="true"
+          />
+          {/* Modal container with scale + fade-in animation */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className={`relative w-full max-w-sm rounded-xl border border-line bg-white p-6 shadow-xl transition-all duration-200 ease-out ${
+                signingOut ? "scale-95 opacity-60" : "scale-100 opacity-100"
+              }`}
+            >
+              {/* Icon */}
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <LogOut size={24} className="text-steel" />
+              </div>
+
+              {/* Content */}
+              <h2 className="text-[17px] font-semibold text-ink">
+                Confirm Sign Out
+              </h2>
+              <p className="mt-1.5 text-[13px] text-steel">
+                Are you sure you want to end your current session?
+              </p>
+
+              {/* Buttons */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => !signingOut && setShowSignOutModal(false)}
+                  disabled={signingOut}
+                  className="flex-1 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-steel hover:bg-paper transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmSignOut}
+                  disabled={signingOut}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-status-rejected px-4 py-2 text-[13px] font-medium text-white hover:bg-status-rejected/90 transition disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {signingOut ? (
+                    <>
+                      <Loader size={14} className="animate-spin" />
+                      Signing out…
+                    </>
+                  ) : (
+                    <>
+                      <LogOut size={14} />
+                      Sign Out
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Main content */}
       <div className="min-w-0 flex-1 [overflow-x:clip]">

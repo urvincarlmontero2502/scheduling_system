@@ -67,8 +67,14 @@ export function AuthProvider({ children }) {
     } catch {
       // Ignore network errors on logout — clear local state regardless.
     }
+    // Clean up all auth-related storage (localStorage + sessionStorage)
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
+    localStorage.removeItem('auth_expires_at')
+    localStorage.removeItem('google_auth_success')
+    localStorage.removeItem('google_registration_token')
+    sessionStorage.removeItem('auth_token')
+    sessionStorage.removeItem('auth_user')
     setUser(null)
   }
 
