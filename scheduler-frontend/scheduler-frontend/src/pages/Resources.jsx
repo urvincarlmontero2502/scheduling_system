@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import {
-  Image as ImageIcon,
   Plus,
   Edit2,
   Trash2,
   Building2,
   Car,
   Calendar,
-  Send,
   Search,
   Wrench,
 } from "lucide-react";
@@ -16,6 +14,30 @@ import { useAuth } from "../context/AuthContext";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import { SkeletonResourceCard } from "../components/Skeleton";
+import Skeleton from "../components/Skeleton";
+
+/** Status badge configuration */
+const STATUS_VARIANTS = {
+  available: {
+    label: "Available",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  booked: {
+    label: "In Use",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  maintenance: {
+    label: "Maintenance",
+    className: "bg-orange-50 text-orange-700 border-orange-200",
+  },
+};
+
+/** Resolve the display status of a resource */
+function getResourceStatus(item) {
+  if (item.is_maintenance || item.status === "maintenance") return "maintenance";
+  if (item.available === false || item.status === "booked") return "booked";
+  return "available";
+}
 
 export default function Resources() {
   const { user } = useAuth();
@@ -23,6 +45,8 @@ export default function Resources() {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [showMaintenanceOnly, setShowMaintenanceOnly] = useState(false);
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -115,13 +139,13 @@ export default function Resources() {
       full_name: payload.full_name || null,
       cell_number: payload.cell_number,
       address: payload.address || null,
-      status: payload.status || 'pending',
+      status: payload.status || "pending",
     };
 
     return api
       .createBooking(apiPayload)
       .then(() => {
-        if (payload.status === 'approved') {
+        if (payload.status === "approved") {
           alert("Resource allocated successfully!");
         } else {
           alert("Booking request submitted successfully!");
@@ -224,10 +248,11 @@ export default function Resources() {
     );
   };
 
-  const vehicles = resources.filter(
+  // Compute filtered resources based on active filter + maintenance toggle
+  const allVehicles = resources.filter(
     (item) => item.type === "vehicle" && matchesSearch(item),
   );
-  const facilities = resources.filter(
+  const allFacilities = resources.filter(
     (item) => item.type === "facility" && matchesSearch(item),
   );
   const maintenanceItems = resources.filter(
@@ -236,101 +261,159 @@ export default function Resources() {
       matchesSearch(item),
   );
 
-  const renderResourceCard = (item) => (
-    <div
-      key={item.resource_id || item.id}
-      className="flex flex-col justify-between overflow-hidden rounded-lg border border-line bg-white shadow-sm hover:shadow-md transition">
-      <div>
-        <div className="h-32 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line relative">
+  // Determine which resources to display based on filter
+  let displayedItems = [];
+  let displayedCount = 0;
+
+  if (showMaintenanceOnly) {
+    displayedItems = maintenanceItems;
+    displayedCount = maintenanceItems.length;
+  } else {
+    switch (activeFilter) {
+      case "vehicle":
+        displayedItems = allVehicles;
+        displayedCount = allVehicles.length;
+        break;
+      case "facility":
+        displayedItems = allFacilities;
+        displayedCount = allFacilities.length;
+        break;
+      case "all":
+      default:
+        displayedItems = resources.filter(matchesSearch);
+        displayedCount = resources.filter(matchesSearch).length;
+        break;
+    }
+  }
+
+  const handleTabClick = (tab) => {
+    setActiveFilter(tab);
+    setShowMaintenanceOnly(false);
+  };
+
+  const renderResourceCard = (item) => {
+    const status = getResourceStatus(item);
+    const statusConfig = STATUS_VARIANTS[status];
+    const resourceType = item?.type?.toLowerCase();
+    const isMaintenance = status === "maintenance";
+
+    return (
+      <div
+        key={item.resource_id || item.id}
+        className="group flex flex-col h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200"
+      >
+        {/* Thumbnail with status badge overlay */}
+        <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
           {item.image ? (
             <img
               src={item.image}
               alt={item.name}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
             />
           ) : (
-            <div className="flex flex-col items-center text-steel gap-1">
-              <ImageIcon size={22} />
+            <div className="flex flex-col items-center justify-center gap-2 text-steel">
+              <div className="rounded-lg bg-gray-50 p-3">
+                {resourceType === "vehicle" ? (
+                  <Car size={32} className="text-gray-400" />
+                ) : (
+                  <Building2 size={32} className="text-gray-400" />
+                )}
+              </div>
               <span className="text-[11px]">No image</span>
             </div>
           )}
+
+          {/* Status badge overlay on thumbnail */}
+          <span
+            className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusConfig.className}`}
+          >
+            {statusConfig.label}
+          </span>
         </div>
-        <div className="p-3.5">
+
+        <div className="flex flex-col flex-1 p-4">
           <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="text-[14px] font-semibold text-ink line-clamp-1">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
                 {item.name}
               </h3>
-              {(item.is_maintenance || item.status === "maintenance") && (
+              {isMaintenance && (
                 <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-800">
                   <Wrench size={10} /> Under Maintenance
                 </span>
               )}
             </div>
             {isAdmin && (
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => handleOpenModal(item)}
                   className="text-steel hover:text-brand transition p-1"
-                  title="Edit Resource">
+                  title="Edit Resource"
+                >
                   <Edit2 size={15} />
                 </button>
                 <button
                   onClick={() => handleMaintenanceToggle(item)}
                   className={`transition p-1 ${
-                    item.is_maintenance || item.status === "maintenance"
+                    isMaintenance
                       ? "text-orange-600 hover:text-orange-700"
                       : "text-steel hover:text-orange-600"
                   }`}
                   title={
-                    item.is_maintenance || item.status === "maintenance"
+                    isMaintenance
                       ? "Mark as Available"
                       : "Mark as Under Maintenance"
-                  }>
+                  }
+                >
                   <Wrench size={15} />
                 </button>
                 <button
                   onClick={() => handleDelete(item.resource_id || item.id)}
                   className="text-steel hover:text-red-500 transition p-1"
-                  title="Delete Resource">
+                  title="Delete Resource"
+                >
                   <Trash2 size={15} />
                 </button>
               </div>
             )}
           </div>
-          <p className="mt-1.5 text-[12.5px] text-steel">
+
+          <p className="mt-2 text-[13px] text-steel">
             Details:{" "}
             <span className="font-medium text-ink">
               {item.capacity || item.unit_name || "—"}
             </span>
           </p>
-          <p className="mt-1 text-[12px] text-steel line-clamp-2">
+          <p className="mt-1 text-[12.5px] text-steel line-clamp-2">
             {item.description || "No description provided."}
           </p>
         </div>
-      </div>
 
-      {/* Request Button Footer */}
-      <div className="p-3.5 pt-0">
-        {isAdmin ? (
-          <button
-            onClick={() => handleOpenRequestModal(item, true)}
-            className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md bg-brand text-white hover:bg-brand-dark py-2 text-[12.5px] font-medium transition">
-            <Calendar size={14} /> Use
-          </button>
-        ) : (
-          <button
-            onClick={() => handleOpenRequestModal(item)}
-            className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md bg-brand-light text-brand hover:bg-brand hover:text-white py-2 text-[12.5px] font-medium transition">
-            <Calendar size={14} /> Request Use
-          </button>
-        )}
+        {/* Request Button Footer */}
+        <div className="p-4 pt-0 mt-auto">
+          {isAdmin ? (
+            <button
+              onClick={() => handleOpenRequestModal(item, true)}
+              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-brand text-white hover:bg-brand-dark py-2 text-[12.5px] font-medium transition"
+            >
+              <Calendar size={14} /> Book Now
+            </button>
+          ) : (
+            <button
+              onClick={() => handleOpenRequestModal(item)}
+              className="w-full flex items-center justify-center gap-1.5 rounded-md bg-brand-light text-brand hover:bg-brand hover:text-white py-2 text-[12.5px] font-medium transition"
+            >
+              <Calendar size={14} /> Request Use
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[20px] font-semibold text-ink">
           Facilities & Vehicles
@@ -338,7 +421,8 @@ export default function Resources() {
         {isAdmin && (
           <button
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 transition">
+            className="flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 transition"
+          >
             <Plus size={16} /> Add Resource
           </button>
         )}
@@ -365,99 +449,87 @@ export default function Resources() {
         )}
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <SkeletonResourceCard />
-          <SkeletonResourceCard />
-          <SkeletonResourceCard />
+      {/* Maintenance Toggle (Admin only) */}
+      {isAdmin && maintenanceItems.length > 0 && (
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            onClick={() => setShowMaintenanceOnly(!showMaintenanceOnly)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition ${
+              showMaintenanceOnly
+                ? "bg-orange-100 text-orange-800 border border-orange-200"
+                : "bg-gray-100 text-steel hover:bg-gray-200 border border-line"
+            }`}
+          >
+            <Wrench size={13} />
+            Under Maintenance ({maintenanceItems.length})
+          </button>
+          {showMaintenanceOnly && (
+            <button
+              onClick={() => setShowMaintenanceOnly(false)}
+              className="text-[12px] text-steel hover:text-ink underline"
+            >
+              Show All
+            </button>
+          )}
         </div>
-      ) : resources.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line bg-white p-12 text-center">
+      )}
+
+      {/* Segmented Control / Tab Filter */}
+      <div className="mb-6 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 border border-line">
+        <button
+          onClick={() => handleTabClick("all")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-medium transition ${
+            activeFilter === "all"
+              ? "bg-white text-ink shadow-sm"
+              : "text-steel hover:text-ink"
+          }`}
+        >
+          All ({displayedCount})
+        </button>
+        <button
+          onClick={() => handleTabClick("vehicle")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-medium transition ${
+            activeFilter === "vehicle"
+              ? "bg-white text-ink shadow-sm"
+              : "text-steel hover:text-ink"
+          }`}
+        >
+          <Car size={15} /> Vehicles ({allVehicles.length})
+        </button>
+        <button
+          onClick={() => handleTabClick("facility")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-medium transition ${
+            activeFilter === "facility"
+              ? "bg-white text-ink shadow-sm"
+              : "text-steel hover:text-ink"
+          }`}
+        >
+          <Building2 size={15} /> Facilities ({allFacilities.length})
+        </button>
+      </div>
+
+      {/* Resource Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonResourceCard key={`skeleton-${i}`} />
+          ))}
+        </div>
+      ) : displayedCount === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line bg-white p-12 text-center">
           <Building2 size={40} className="text-steel mb-2 opacity-40" />
           <h2 className="text-[15px] font-semibold text-ink">
             No resources found
           </h2>
           <p className="text-[13px] text-steel mt-1 max-w-sm">
-            Get started by adding your first facility or vehicle using the
-            button above.
+            {searchQuery
+              ? "Try adjusting your search terms."
+              : "Get started by adding your first facility or vehicle using the button above."}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Left Column: Vehicles */}
-          <div className="rounded-xl border border-line bg-paper/50 p-4 space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3 px-1">
-              <div className="flex items-center gap-2">
-                <Car size={18} className="text-brand" />
-                <h2 className="text-[15px] font-semibold text-ink">Vehicles</h2>
-              </div>
-              <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[12px] font-medium text-brand">
-                {vehicles.length}
-              </span>
-            </div>
-
-            {vehicles.length === 0 ? (
-              <p className="text-[13px] text-steel italic p-4 text-center">
-                No vehicles registered.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {vehicles.map(renderResourceCard)}
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Facilities */}
-          <div className="rounded-xl border border-line bg-paper/50 p-4 space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3 px-1">
-              <div className="flex items-center gap-2">
-                <Building2 size={18} className="text-brand" />
-                <h2 className="text-[15px] font-semibold text-ink">
-                  Facilities
-                </h2>
-              </div>
-              <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[12px] font-medium text-brand">
-                {facilities.length}
-              </span>
-            </div>
-
-            {facilities.length === 0 ? (
-              <p className="text-[13px] text-steel italic p-4 text-center">
-                No facilities registered.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {facilities.map(renderResourceCard)}
-              </div>
-            )}
-          </div>
-
-          {/* Under Maintenance Section (Admin only) */}
-          {isAdmin && (
-            <div className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-4 space-y-4">
-              <div className="flex items-center justify-between border-b border-orange-200 pb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <Wrench size={18} className="text-orange-600" />
-                  <h2 className="text-[15px] font-semibold text-orange-800">
-                    Under Maintenance
-                  </h2>
-                </div>
-                <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[12px] font-medium text-orange-800">
-                  {maintenanceItems.length}
-                </span>
-              </div>
-
-              {maintenanceItems.length === 0 ? (
-                <p className="text-[13px] text-steel italic p-4 text-center">
-                  No resources currently under maintenance.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {maintenanceItems.map(renderResourceCard)}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {displayedItems.map(renderResourceCard)}
         </div>
       )}
 
@@ -521,7 +593,8 @@ export default function Resources() {
                   onChange={(e) =>
                     setFormData({ ...formData, type: e.target.value })
                   }
-                  className="w-full rounded-md border border-line px-3 py-2 text-[13px] focus:outline-none focus:border-brand">
+                  className="w-full rounded-md border border-line px-3 py-2 text-[13px] focus:outline-none focus:border-brand"
+                >
                   <option value="facility">Facility</option>
                   <option value="vehicle">Vehicle</option>
                 </select>
@@ -579,12 +652,14 @@ export default function Resources() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-md border border-line px-4 py-2 text-[13px] text-steel hover:bg-paper">
+                  className="rounded-md border border-line px-4 py-2 text-[13px] text-steel hover:bg-paper"
+                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-white hover:opacity-90">
+                  className="rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+                >
                   {editingResource ? "Save Changes" : "Create Resource"}
                 </button>
               </div>

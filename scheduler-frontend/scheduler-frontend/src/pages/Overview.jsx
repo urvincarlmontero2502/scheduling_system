@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
-import { Building2, Car, Image as ImageIcon, Search, Filter } from "lucide-react";
+import { Building2, Car, Search, Filter } from "lucide-react";
 import * as api from "../api/endpoints";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import VehicleBookingModal from "../components/VehicleBookingModal";
@@ -443,31 +443,41 @@ export default function Overview() {
                   <div
                     key={item.resource_id || item.id}
                     onClick={() => handleOpenBooking(item)}
-                    className="cursor-pointer overflow-hidden rounded-lg border border-line bg-white shadow-sm hover:border-brand hover:shadow-md transition">
-                    <div className="h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                    className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
                       {item.image && item.image.trim() !== "" ? (
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
                         />
                       ) : (
                         <div className="flex flex-col items-center text-steel gap-1">
-                          <ImageIcon size={24} />
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <Building2 size={24} className="text-gray-400" />
+                          </div>
                           <span className="text-[11px]">No image provided</span>
                         </div>
                       )}
+                      <span
+                        className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                          item.is_maintenance || item.status === "maintenance"
+                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                            : item.available
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                        {item.is_maintenance || item.status === "maintenance"
+                          ? "Maintenance"
+                          : item.available
+                            ? "Available"
+                            : "In Use"}
+                      </span>
                     </div>
                     <div className="p-4">
-                      <div className="flex items-start justify-between">
-                        <h3 className="text-[14px] font-semibold text-ink">
-                          {item.name}
-                        </h3>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${item.available ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                          {item.available ? "Available" : "Booked"}
-                        </span>
-                      </div>
+                      <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
+                        {item.name}
+                      </h3>
                       <p className="mt-2 text-[13px] text-steel">
                         Capacity:{" "}
                         <span className="font-medium text-ink">
@@ -475,10 +485,10 @@ export default function Overview() {
                         </span>
                       </p>
                       <p className="mt-1 text-[12.5px] text-steel truncate">
-                        Description: {item.description || "None"}
+                        {item.description || "No description provided."}
                       </p>
                       <div className="mt-3 text-[12px] font-medium text-brand">
-                        Click to request booking &rarr;
+                        Click to request booking →
                       </div>
                     </div>
                   </div>
@@ -513,31 +523,41 @@ export default function Overview() {
                   <div
                     key={item.resource_id || item.id}
                     onClick={() => handleOpenBooking(item)}
-                    className="cursor-pointer overflow-hidden rounded-lg border border-line bg-white shadow-sm hover:border-brand hover:shadow-md transition">
-                    <div className="h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
+                    className="group cursor-pointer overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <div className="relative h-36 w-full bg-paper flex items-center justify-center overflow-hidden border-b border-line">
                       {item.image && item.image.trim() !== "" ? (
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
                         />
                       ) : (
                         <div className="flex flex-col items-center text-steel gap-1">
-                          <ImageIcon size={24} />
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <Car size={24} className="text-gray-400" />
+                          </div>
                           <span className="text-[11px]">No image provided</span>
                         </div>
                       )}
+                      <span
+                        className={`absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                          item.is_maintenance || item.status === "maintenance"
+                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                            : item.available
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                        {item.is_maintenance || item.status === "maintenance"
+                          ? "Maintenance"
+                          : item.available
+                            ? "Available"
+                            : "In Use"}
+                      </span>
                     </div>
                     <div className="p-4">
-                      <div className="flex items-start justify-between">
-                        <h3 className="text-[14px] font-semibold text-ink">
-                          {item.name}
-                        </h3>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${item.available ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                          {item.available ? "Available" : "Booked"}
-                        </span>
-                      </div>
+                      <h3 className="text-[15px] font-semibold text-ink line-clamp-1">
+                        {item.name}
+                      </h3>
                       <p className="mt-2 text-[13px] text-steel">
                         Unit Details:{" "}
                         <span className="font-medium text-ink">
@@ -545,10 +565,10 @@ export default function Overview() {
                         </span>
                       </p>
                       <p className="mt-1 text-[12.5px] text-steel truncate">
-                        Description: {item.description || "None"}
+                        {item.description || "No description provided."}
                       </p>
                       <div className="mt-3 text-[12px] font-medium text-brand">
-                        Click to request booking &rarr;
+                        Click to request booking →
                       </div>
                     </div>
                   </div>
