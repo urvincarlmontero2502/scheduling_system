@@ -18,7 +18,6 @@ import {
 // Helper: robustly extract date parts from various formats
 const parseDate = (dateStr) => {
   if (!dateStr) return null;
-  // Handle ISO datetime: 2026-10-15T08:00:00
   const datePart = String(dateStr).split("T")[0];
   const parts = datePart.split("-").map(Number);
   if (parts.length !== 3) return null;
@@ -29,7 +28,6 @@ const parseDate = (dateStr) => {
 
 // Helper: match booking to resource ID
 const isMatch = (booking, resourceId) => {
-  // Try multiple possible field names for resource ID
   const bookingResourceId =
     booking.resource_id ??
     booking.item_id ??
@@ -78,6 +76,7 @@ export default function VehicleBookingModal({
     full_name: "",
     cell_number: "",
     address: "",
+    start_time_changed: false,
   });
   const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
   const [submitting, setSubmitting] = useState(false);
@@ -88,28 +87,15 @@ export default function VehicleBookingModal({
   // Load bookings so the calendar can show pending / approved days
   useEffect(() => {
     if (!isOpen) return;
-    // Reset calendar to current month when modal opens
     setCurrentMonthDate(new Date());
     const load = () =>
       api
         .fetchBookings?.()
         .then((res) => {
           const fetchedBookings = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-          console.log("📅 [VehicleBookingModal] Bookings fetched:", fetchedBookings.length);
-          if (fetchedBookings.length > 0) {
-            console.log("📅 [VehicleBookingModal] Sample booking:", fetchedBookings[0]);
-            const resId = selectedVehicle?.resource_id || selectedVehicle?.id;
-            console.log("📅 [VehicleBookingModal] Selected vehicle:", selectedVehicle);
-            console.log("📅 [VehicleBookingModal] Resource ID:", resId, "Type:", typeof resId);
-            console.log("📅 [VehicleBookingModal] Booking resource_id:", fetchedBookings[0]?.resource_id, "Type:", typeof fetchedBookings[0]?.resource_id);
-            console.log("📅 [VehicleBookingModal] Booking status:", fetchedBookings[0]?.status);
-            console.log("📅 [VehicleBookingModal] Booking start_date:", fetchedBookings[0]?.start_date);
-            console.log("📅 [VehicleBookingModal] Total matching bookings:", fetchedBookings.filter(b => isMatch(b, resId)).length);
-          }
           setBookings(fetchedBookings);
         })
-        .catch((err) => {
-          console.error("📅 [VehicleBookingModal] Failed to fetch bookings:", err);
+        .catch(() => {
           setBookings([]);
         });
     load();
@@ -121,85 +107,8 @@ export default function VehicleBookingModal({
     };
   }, [isOpen]);
 
-  if (!isOpen || !selectedVehicle) return null;
-
-  // Days of this resource that have approved / pending bookings
-  const dayStatus = {};
-  const resourceId = selectedVehicle.resource_id || selectedVehicle.id;
-  console.log("📅 [VehicleBookingModal] Computing dayStatus for resourceId:", resourceId, "bookings count:", bookings.length);
-
-  bookings.forEach((b, idx) => {
-    const isApproved = isApprovedStatus(b.status);
-    const isPending = isPendingStatus(b.status);
-    if (!isApproved && !isPending) {
-      console.log("📅 [VehicleBookingModal] Booking idx:", idx, "Status not recognized as approved/pending:", b.status);
-      return;
-    }
-
-    const sameResource = isMatch(b, resourceId);
-    if (!sameResource) {
-      console.log("📅 [VehicleBookingModal] Booking idx:", idx, "Resource mismatch - b.resource_id:", b.resource_id, "b.item_id:", b.item_id, "expected:", resourceId, "b.resource:", b.resource, "selectedVehicle.name:", selectedVehicle.name);
-      return;
-    }
-
-    const startParts = parseDate(b.start_date);
-    const endParts = parseDate(b.end_date || b.start_date);
-    if (!startParts || !endParts) {
-      console.log("📅 [VehicleBookingModal] Booking idx:", idx, "Date parse failed - start_date:", b.start_date, "end_date:", b.end_date);
-      return;
-    }
-
-    const sy = startParts.y, sm = startParts.m, sd = startParts.d;
-    const ey = endParts.y, em = endParts.m, ed = endParts.d;
-
-    if (!sy || !ey) return;
-    const cur = new Date(sy, sm - 1, sd);
-    const last = new Date(ey, em - 1, ed);
-    for (let i = 0; cur <= last && i < 366; i++) {
-      const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-      dayStatus[key] = dayStatus[key] || {};
-      if (isApproved) dayStatus[key].approved = true;
-      if (isPending) dayStatus[key].pending = true;
-      cur.setDate(cur.getDate() + 1);
-    }
-  });
-  console.log("📅 [VehicleBookingModal] dayStatus computed:", dayStatus);
-
-  // Approved bookings of this resource that overlap the chosen dates and times
-  const toMins = (t) => {
-    const m = String(t || "").match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-    if (!m) return null;
-    let h = Number(m[1]);
-    const ap = (m[3] || "").toUpperCase();
-    if (ap === "PM" && h < 12) h += 12;
-    if (ap === "AM" && h === 12) h = 0;
-    return h * 60 + Number(m[2]);
-  };
-  const conflict =
-    formData.start_date && formData.end_date
-      ? bookings.find((b) => {
-          if (!isApprovedStatus(b.status)) return false;
-          if (!isMatch(b, resourceId)) return false;
-          // Handle datetime format: extract date portion for comparison
-          const bStart = (b.start_date || "").split("T")[0];
-          const bEnd = (b.end_date || b.start_date || "").split("T")[0];
-          if (!bStart) return false;
-          if (!(formData.start_date <= bEnd && bStart <= formData.end_date))
-            return false;
-          const ns = toMins(formData.start_time);
-          const ne = toMins(formData.end_time);
-          const bs = toMins(b.start_time);
-          const be = toMins(b.end_time);
-          if ([ns, ne, bs, be].some((v) => v === null)) return true;
-          return Math.max(ns, bs) < Math.min(ne, be);
-        })
-      : null;
-
-  const update = (field, value) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
-
   // Fetch available time slots when dates are selected
-  const fetchSuggestedSlots = (date) => {
+  const fetchSuggestedSlots = (date, resourceId) => {
     if (!date || !resourceId) {
       setSuggestedSlots([]);
       return;
@@ -224,20 +133,87 @@ export default function VehicleBookingModal({
       });
   };
 
-  // Auto-fetch suggestions when a single date is selected (not when user
-  // just changed start/end_time via slot selection)
+  // Auto-fetch suggestions when a single date is selected
   useEffect(() => {
+    if (!isOpen || !selectedVehicle) return;
     if (formData.start_date && !formData.end_date && !formData.start_time_changed) {
-      fetchSuggestedSlots(formData.start_date);
+      const resourceId = selectedVehicle?.resource_id || selectedVehicle?.id;
+      fetchSuggestedSlots(formData.start_date, resourceId);
     }
-  }, [formData.start_date, formData.end_date]);
+  }, [formData.start_date, formData.end_date, isOpen, selectedVehicle, formData.start_time_changed]);
 
   // Reset the flag when start_date changes (new date selection)
   useEffect(() => {
+    if (!isOpen || !selectedVehicle) return;
     if (formData.start_date) {
       setFormData((prev) => ({ ...prev, start_time_changed: false }));
     }
-  }, [formData.start_date]);
+  }, [formData.start_date, isOpen, selectedVehicle]);
+
+  // EARLY RETURN — after ALL hooks to prevent React error #310
+  if (!isOpen || !selectedVehicle) return null;
+
+  // Days of this resource that have approved / pending bookings
+  const dayStatus = {};
+  const resourceId = selectedVehicle.resource_id || selectedVehicle.id;
+
+  bookings.forEach((b) => {
+    const isApproved = isApprovedStatus(b.status);
+    const isPending = isPendingStatus(b.status);
+    if (!isApproved && !isPending) return;
+
+    const sameResource = isMatch(b, resourceId);
+    if (!sameResource) return;
+
+    const startParts = parseDate(b.start_date);
+    const endParts = parseDate(b.end_date || b.start_date);
+    if (!startParts || !endParts) return;
+
+    const sy = startParts.y, sm = startParts.m, sd = startParts.d;
+    const ey = endParts.y, em = endParts.m, ed = endParts.d;
+    if (!sy || !ey) return;
+    const cur = new Date(sy, sm - 1, sd);
+    const last = new Date(ey, em - 1, ed);
+    for (let i = 0; cur <= last && i < 366; i++) {
+      const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      dayStatus[key] = dayStatus[key] || {};
+      if (isApproved) dayStatus[key].approved = true;
+      if (isPending) dayStatus[key].pending = true;
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  // Approved bookings of this resource that overlap the chosen dates and times
+  const toMins = (t) => {
+    const m = String(t || "").match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!m) return null;
+    let h = Number(m[1]);
+    const ap = (m[3] || "").toUpperCase();
+    if (ap === "PM" && h < 12) h += 12;
+    if (ap === "AM" && h === 12) h = 0;
+    return h * 60 + Number(m[2]);
+  };
+  const conflict =
+    formData.start_date && formData.end_date
+      ? bookings.find((b) => {
+          if (!isApprovedStatus(b.status)) return false;
+          if (!isMatch(b, resourceId)) return false;
+          const bStart = (b.start_date || "").split("T")[0];
+          const bEnd = (b.end_date || b.start_date || "").split("T")[0];
+          if (!bStart) return false;
+          if (!(formData.start_date <= bEnd && bStart <= formData.end_date))
+            return false;
+          const ns = toMins(formData.start_time);
+          const ne = toMins(formData.end_time);
+          const bs = toMins(b.start_time);
+          const be = toMins(b.end_time);
+          if ([ns, ne, bs, be].some((v) => v === null)) return true;
+          return Math.max(ns, bs) < Math.min(ne, be);
+        })
+      : null;
+
+  const update = (field, value) =>
+    setFormData((prev) => ({ ...prev, [field]: value }));
 
   // Apply a suggested slot to the form
   const applySlot = (slot) => {
@@ -387,7 +363,6 @@ export default function VehicleBookingModal({
             <ChevronRight size={14} />
           </button>
         </div>
-
         <div className="mb-1 grid grid-cols-7 border-b border-line pb-1 text-center text-[10px] font-semibold text-steel">
           <span>S</span>
           <span>M</span>
@@ -397,11 +372,9 @@ export default function VehicleBookingModal({
           <span>F</span>
           <span>S</span>
         </div>
-
         <div className="grid grid-cols-7 justify-items-center gap-y-0.5">
           {days}
         </div>
-
         <div className="mt-2 flex items-center justify-center gap-4 border-t border-line pt-2 text-[10.5px] text-steel">
           <span className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{" "}
@@ -434,15 +407,13 @@ export default function VehicleBookingModal({
       ...formData,
       status: isDirectUse ? "approved" : "pending",
     };
+
     Promise.resolve(onSubmit(payload))
       .catch((err) => {
-        // Backend returned a 409 conflict with suggested slots
         if (err?.response?.status === 409) {
           const data = err.response.data;
           const slots = data?.suggested_slots || [];
           setSuggestedSlots(slots);
-          // Show conflict info from backend
-          console.log("Conflict:", data?.message, data?.conflicting_booking);
         }
       })
       .finally(() => setSubmitting(false));
@@ -466,7 +437,6 @@ export default function VehicleBookingModal({
             <X size={18} />
           </button>
         </div>
-
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto px-5 py-4 md:grid-cols-2">
             {/* LEFT: image + details */}
@@ -486,7 +456,6 @@ export default function VehicleBookingModal({
                   </div>
                 )}
               </div>
-
               <div className="space-y-1.5 rounded-lg border border-line bg-paper/50 p-3">
                 <h3 className="text-[13px] font-semibold text-ink">
                   {selectedVehicle.name}
@@ -504,7 +473,6 @@ export default function VehicleBookingModal({
                     "No description provided for this resource."}
                 </p>
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink">
@@ -534,7 +502,6 @@ export default function VehicleBookingModal({
                 </div>
               </div>
             </div>
-
             {/* RIGHT: calendar + form */}
             <div className="space-y-2.5">
               <div>
@@ -542,9 +509,7 @@ export default function VehicleBookingModal({
                   <CalendarIcon size={14} className="text-brand" /> Select Date
                   Range & Time
                 </label>
-
                 {renderCalendarGrid()}
-
                 <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-line bg-paper p-2 text-[11px]">
                   <div>
                     <span className="mb-0.5 block text-steel">Start:</span>
@@ -572,7 +537,6 @@ export default function VehicleBookingModal({
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink">
@@ -607,7 +571,6 @@ export default function VehicleBookingModal({
                   />
                 </div>
               </div>
-
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink">
                   <Home size={13} className="text-brand" /> Where do you live
@@ -624,7 +587,6 @@ export default function VehicleBookingModal({
               </div>
             </div>
           </div>
-
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
             {conflict && (
               <div className="mr-auto mb-2 w-full sm:mb-0 sm:w-auto sm:max-w-[70%]">
@@ -655,7 +617,7 @@ export default function VehicleBookingModal({
               </div>
             )}
             {suggestedSlots.length > 0 && (
-              <div className="mr-auto mb-2 w-full sm:mb-0 sm:max-w-[70%]">
+              <div className="mr-auto mb-2 w-full sm:mb-0 sm:w-auto sm:max-w-[70%]">
                 <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink">
                   <Sparkles size={12} className="text-brand" />
                   Suggested {suggestedSlots.length === 1 ? "available time" : "available times"}
@@ -675,7 +637,7 @@ export default function VehicleBookingModal({
               </div>
             )}
             {loadingSlots && (
-              <div className="mr-auto mb-2 w-full sm:mb-0 sm:max-w-[70%]">
+              <div className="mr-auto mb-2 w-full sm:mb-0 sm:w-auto sm:max-w-[70%]">
                 <p className="text-[11px] text-steel">Checking availability...</p>
               </div>
             )}
