@@ -130,10 +130,6 @@ export default function DashboardLayout() {
             </div>
             <p className="text-[16px] font-bold leading-tight">Scheduler</p>
           </div>
-          {/* Notification Bell (desktop sidebar) */}
-          <div className="hidden md:block">
-            <NotificationBell onClick={() => setNotifDropdownOpen(!notifDropdownOpen)} />
-          </div>
           <button
             onClick={() => setOpen(false)}
             aria-label="Close menu"
