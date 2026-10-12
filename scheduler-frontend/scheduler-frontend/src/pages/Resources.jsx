@@ -106,7 +106,8 @@ export default function Resources() {
       })
       .catch((err) => {
         console.error("Failed to fetch resources", err);
-        // Keep cached data on error
+        // Show user-friendly error toast instead of silently failing
+        toast.error("Unable to load resources");
       })
       .finally(() => setLoading(false));
   };

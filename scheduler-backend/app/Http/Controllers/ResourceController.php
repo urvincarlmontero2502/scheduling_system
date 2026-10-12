@@ -5,55 +5,72 @@ namespace App\Http\Controllers;
 use App\Models\Resource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 
 class ResourceController extends Controller
 {
     public function index(Request $request)
     {
-        // Select only necessary columns to minimize payload:
-        // resource_id, name, type, status, description, image
-        // Plus capacity (facilities) / unit_name (vehicles) via optimized joins
-        $query = Resource::query()
-            ->select('resource_id', 'name', 'type', 'status', 'description', 'image');
+        try {
+            // Select only necessary columns to minimize payload:
+            // resource_id, name, type, status, image, description
+            $columns = ['resource_id', 'name', 'type', 'status', 'image'];
 
-        if ($request->has('type')) {
-            $query->where('type', $request->query('type'));
+            // Check if description column exists before selecting it
+            if (Schema::hasColumn('resources', 'description')) {
+                $columns[] = 'description';
+            }
+
+            $query = Resource::query()->select($columns);
+
+            if ($request->has('type')) {
+                $query->where('type', $request->query('type'));
+            }
+
+            $isFacility = $request->query('type') === 'facility';
+            $isVehicle  = $request->query('type') === 'vehicle';
+
+            // Only join detail tables if they exist
+            if (!$request->has('type') || $isFacility) {
+                if (Schema::hasTable('facility_details')) {
+                    $query->leftJoin('facility_details', 'facility_details.resource_id', '=', 'resources.resource_id')
+                           ->addSelect('facility_details.capacity as facility_capacity');
+                }
+            }
+            if (!$request->has('type') || $isVehicle) {
+                if (Schema::hasTable('vehicle_details')) {
+                    $query->leftJoin('vehicle_details', 'vehicle_details.resource_id', '=', 'resources.resource_id')
+                           ->addSelect('vehicle_details.unit_name as vehicle_unit_name');
+                }
+            }
+
+            $resources = $query->get()->map(function ($r) {
+                return [
+                    'id' => $r->resource_id,
+                    'resource_id' => $r->resource_id,
+                    'name' => $r->name,
+                    'type' => $r->type,
+                    'image' => $r->image ? Storage::disk('assets')->url($r->image) : null,
+                    'image_url' => $r->image ? Storage::disk('assets')->url($r->image) : null,
+                    'available' => $r->status === 'available',
+                    'status' => $r->status,
+                    'is_maintenance' => $r->status === 'maintenance',
+                    'description' => $r->description ?? null,
+                    'capacity' => $r->type === 'facility' && $r->facility_capacity
+                        ? $r->facility_capacity . ' pax'
+                        : null,
+                    'unit_name' => $r->type === 'vehicle' ? ($r->vehicle_unit_name ?? null) : null,
+                ];
+            });
+
+            return response()->json($resources);
+        } catch (\Exception $e) {
+            // Return detailed error in dev mode; generic message otherwise
+            $message = config('app.debug')
+                ? $e->getMessage() . ' | File: ' . $e->getFile() . ':' . $e->getLine()
+                : 'Failed to fetch resources';
+            return response()->json(['error' => $message], 500);
         }
-
-        // Use left joins to fetch only the needed detail columns in a single query
-        // (avoids N+1 when eager-loading full models)
-        $isFacility = $request->query('type') === 'facility';
-        $isVehicle = $request->query('type') === 'vehicle';
-
-        if (!$request->has('type') || $isFacility) {
-            $query->leftJoin('facility_details', 'facility_details.resource_id', '=', 'resources.resource_id')
-                   ->addSelect('facility_details.capacity as facility_capacity');
-        }
-        if (!$request->has('type') || $isVehicle) {
-            $query->leftJoin('vehicle_details', 'vehicle_details.resource_id', '=', 'resources.resource_id')
-                   ->addSelect('vehicle_details.unit_name as vehicle_unit_name');
-        }
-
-        $resources = $query->get()->map(function ($r) {
-            return [
-                'id' => $r->resource_id,
-                'resource_id' => $r->resource_id,
-                'name' => $r->name,
-                'type' => $r->type,
-                'image' => $r->image ? Storage::disk('assets')->url($r->image) : null,
-                'image_url' => $r->image ? Storage::disk('assets')->url($r->image) : null,
-                'available' => $r->status === 'available',
-                'status' => $r->status,
-                'is_maintenance' => $r->status === 'maintenance',
-                'description' => $r->description,
-                'capacity' => $r->type === 'facility' && $r->facility_capacity
-                    ? $r->facility_capacity . ' pax'
-                    : null,
-                'unit_name' => $r->type === 'vehicle' ? ($r->vehicle_unit_name ?? null) : null,
-            ];
-        });
-
-        return response()->json($resources);
     }
 
     public function store(Request $request)

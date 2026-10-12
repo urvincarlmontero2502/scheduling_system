@@ -117,8 +117,14 @@ export default function Overview() {
 
     // Background: fetch fresh data in parallel (no waterfall)
     Promise.all([
-      api.fetchBookings?.().catch(() => ({ data: [] })),
-      api.fetchResources?.().catch(() => ({ data: [] })),
+      api.fetchBookings?.().catch((err) => {
+        if (isMounted) toast.error("Unable to load bookings");
+        return { data: [] };
+      }),
+      api.fetchResources?.().catch((err) => {
+        if (isMounted) toast.error("Unable to load resources");
+        return { data: [] };
+      }),
     ])
       .then(([bookingsRes, resourcesRes]) => {
         if (!isMounted) return;

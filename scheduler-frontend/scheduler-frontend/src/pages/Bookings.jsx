@@ -224,7 +224,9 @@ export default function Bookings() {
         setBookings(data);
       })
       .catch(() => {
-        // Keep cached data on error
+        // Show user-friendly error toast instead of silently failing
+        if (!toast) return;
+        toast.error("Unable to load bookings");
       })
       .finally(() => setLoading(false));
 
