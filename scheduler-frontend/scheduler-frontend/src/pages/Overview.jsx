@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
+import { useNotifications } from "../context/NotificationContext";
+import NotificationBell from "../components/NotificationBell";
+import NotificationDropdown from "../components/NotificationDropdown";
 import {
   readCache,
   writeCache,
@@ -71,6 +74,7 @@ export default function Overview() {
   const [vehicleSubFilter, setVehicleSubFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
 
   // Compute booking stats from bookings array (pure function)
   const computeStats = (bookings) => {
@@ -409,7 +413,7 @@ export default function Overview() {
           </p>
         </div>
 
-        {/* API & DB Status Indicators */}
+        {/* API & DB Status Indicators + Notification Bell */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-medium text-steel">
             <span className="relative flex h-2.5 w-2.5">
@@ -454,8 +458,18 @@ export default function Overview() {
                   : "Database Error"}
             </span>
           </div>
+          {/* Notification Bell */}
+          <NotificationBell
+            onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+          />
         </div>
       </header>
+
+      {/* Notification Dropdown */}
+      <NotificationDropdown
+        open={notifDropdownOpen}
+        onClose={() => setNotifDropdownOpen(false)}
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 md:grid-cols-4">
