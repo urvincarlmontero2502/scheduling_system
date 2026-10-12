@@ -2,9 +2,6 @@ import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
-import { useNotifications } from "../context/NotificationContext";
-import NotificationBell from "../components/NotificationBell";
-import NotificationDropdown from "../components/NotificationDropdown";
 import {
   readCache,
   writeCache,
@@ -74,7 +71,6 @@ export default function Overview() {
   const [vehicleSubFilter, setVehicleSubFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
-  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
 
   // Compute booking stats from bookings array (pure function)
   const computeStats = (bookings) => {
@@ -458,20 +454,8 @@ export default function Overview() {
                   : "Database Error"}
             </span>
           </div>
-          {/* Notification Bell (desktop only) */}
-          <div className="hidden md:block">
-            <NotificationBell
-              onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-            />
-          </div>
         </div>
       </header>
-
-      {/* Notification Dropdown */}
-      <NotificationDropdown
-        open={notifDropdownOpen}
-        onClose={() => setNotifDropdownOpen(false)}
-      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 md:grid-cols-4">
