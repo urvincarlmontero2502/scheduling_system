@@ -6,8 +6,14 @@ use App\Models\Approval;
 use App\Models\BookingRequest;
 use App\Models\Notification;
 use App\Models\Resource;
+use App\Models\User;
+use App\Mail\BookingApproved;
+use App\Mail\BookingRejected;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Exception;
 
 class BookingController extends Controller
 {
@@ -375,6 +381,22 @@ class BookingController extends Controller
                 $validated['status'] ?? 'pending',
         ]);
 
+        // Notify administrators of new pending booking request
+        $admins = User::where('role', 'admin')->get();
+        $resource = $booking->resource;
+        $resourceName = $resource ? $resource->name : 'Unknown';
+        $requesterName = $booking->full_name ?? ($request->user()->full_name ?? 'Unknown');
+
+        foreach ($admins as $admin) {
+            Notification::create([
+                'booking_id' => $booking->booking_id,
+                'user_id' => $admin->user_id,
+                'type' => 'BOOKING_REQUEST',
+                'title' => 'New Booking Request',
+                'message' => "{$requesterName} requested '{$resourceName}' ({$booking->start_date} to {$booking->end_date}).",
+                'is_read' => false,
+            ]);
+        }
 
         return response()->json(
             $booking->load([
@@ -477,7 +499,34 @@ class BookingController extends Controller
 
             'is_read' =>
                 false,
+
+            'type' =>
+                $validated['status'] === 'approved'
+                    ? 'BOOKING_APPROVED'
+                    : 'BOOKING_REJECTED',
+
+            'title' =>
+                $validated['status'] === 'approved'
+                    ? 'Booking Approved'
+                    : 'Booking Rejected',
         ]);
+
+        // Send email notification to the requesting user
+        try {
+            $requester = User::find($booking->user_id);
+            $resource = $booking->resource;
+            $resourceName = $resource ? $resource->name : 'Unknown Resource';
+
+            if ($requester && $requester->email) {
+                if ($validated['status'] === 'approved') {
+                    Mail::to($requester->email)->send(new BookingApproved($booking, $requester));
+                } else {
+                    Mail::to($requester->email)->send(new BookingRejected($booking, $requester));
+                }
+            }
+        } catch (Exception $e) {
+            Log::warning('Failed to send booking status email: ' . $e->getMessage());
+        }
 
 
         return response()->json($booking);

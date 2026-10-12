@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -174,6 +175,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('admin');
     Route::delete('/uploads', [UploadController::class, 'delete'])
         ->middleware('admin');
+
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
     Route::get('/uploads/{path}', [UploadController::class, 'getFile'])
         ->where('path', '.*');
 

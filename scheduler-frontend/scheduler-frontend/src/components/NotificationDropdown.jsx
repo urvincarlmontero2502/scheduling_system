@@ -1,0 +1,209 @@
+import { useEffect, useRef } from "react"
+import { X, CheckCheck, Trash2 } from "lucide-react"
+import { useNotifications } from "../context/NotificationContext"
+
+// Simple time-ago formatter (no external deps)
+const timeAgo = (date) => {
+  if (!date) return ""
+  const now = new Date()
+  const then = new Date(date)
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHr = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHr / 24)
+
+  if (diffMin < 1) return "just now"
+  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? "s" : ""} ago`
+  if (diffHr < 24) return `${diffHr} hr${diffHr > 1 ? "s" : ""} ago`
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`
+  const diffWk = Math.floor(diffDay / 7)
+  return `${diffWk} week${diffWk > 1 ? "s" : ""} ago`
+}
+
+export default function NotificationDropdown({ open, onClose }) {
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+  } = useNotifications()
+  const dropdownRef = useRef(null)
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  // Close when clicking outside
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        onClose()
+      }
+    }
+    document.addEventListener("mousedown", onClick)
+    return () => document.removeEventListener("mousedown", onClick)
+  }, [open, onClose])
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllAsRead()
+    } catch (e) {
+      // Error handled in context
+    }
+  }
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await markAsRead(id)
+    } catch (e) {
+      // Error handled in context
+    }
+  }
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteNotification(id)
+    } catch (e) {
+      // Error handled in context
+    }
+  }
+
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case "BOOKING_APPROVED":
+        return "🟢"
+      case "BOOKING_REJECTED":
+        return "🔴"
+      case "MAINTENANCE_ALERT":
+        return "🛠️"
+      case "BOOKING_SUBMITTED":
+        return "📋"
+      default:
+        return "🔔"
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/30"
+        aria-hidden="true"
+      />
+
+      {/* Dropdown */}
+      <div
+        ref={dropdownRef}
+        className="fixed z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-white shadow-xl"
+        style={{
+          top: "calc(64px + 1rem)",
+          right: "1rem",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+          <h3 className="text-sm font-semibold text-ink">Notifications</h3>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="rounded-lg p-1 text-steel hover:bg-paper hover:text-ink"
+                title="Mark all as read"
+              >
+                <CheckCheck size={16} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-steel hover:bg-paper hover:text-ink"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="max-h-80 overflow-y-auto">
+          {loading && notifications.length === 0 ? (
+            <div className="p-4 text-center text-sm text-steel">
+              Loading notifications...
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-6 text-center text-sm text-steel">
+              No notifications yet
+            </div>
+          ) : (
+            <ul className="divide-y divide-line">
+              {notifications.map((notif) => {
+                const id = notif.notif_id || notif.id
+                const isUnread = !notif.is_read
+                return (
+                  <li
+                    key={id}
+                    className={`px-4 py-3 transition-colors ${
+                      isUnread ? "bg-brand-light/30" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg" role="img" aria-label={notif.type || "notification"}>
+                        {getTypeIcon(notif.type)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-ink">
+                          {notif.title}
+                        </p>
+                        <p className="mt-0.5 text-sm text-steel">{notif.message}</p>
+                        <p className="mt-1 text-xs text-steel">
+                          {timeAgo(notif.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        {isUnread && (
+                          <span className="h-2 w-2 rounded-full bg-rose-500" title="Unread" />
+                        )}
+                        <button
+                          onClick={() => handleDelete(id)}
+                          className="rounded p-0.5 text-steel opacity-0 hover:text-status-rejected hover:bg-paper transition-opacity group-hover:opacity-100"
+                          title="Delete"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer */}
+        {notifications.length > 0 && (
+          <div className="border-t border-line px-4 py-2">
+            <button
+              onClick={() => {
+                handleMarkAllRead()
+                onClose()
+              }}
+              className="w-full text-center text-xs font-medium text-brand hover:text-brand-dark"
+            >
+              Mark all as read
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}

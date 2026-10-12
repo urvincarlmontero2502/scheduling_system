@@ -14,6 +14,8 @@ import {
   Loader,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import NotificationBell from "../components/NotificationBell";
+import NotificationDropdown from "../components/NotificationDropdown";
 
 const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: LayoutGrid, end: true },
@@ -41,6 +43,7 @@ export default function DashboardLayout() {
   const [open, setOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
 
   // Close the mobile menu when the page changes
   useEffect(() => {
@@ -100,6 +103,10 @@ export default function DashboardLayout() {
           <CalendarClock size={18} />
         </div>
         <p className="text-[16px] font-bold">Scheduler</p>
+        {/* Notification Bell (mobile) */}
+        <div className="ml-auto">
+          <NotificationBell onClick={() => setNotifDropdownOpen(!notifDropdownOpen)} />
+        </div>
       </header>
 
       {/* Dim background behind the mobile menu */}
@@ -122,6 +129,10 @@ export default function DashboardLayout() {
               <CalendarClock size={20} />
             </div>
             <p className="text-[16px] font-bold leading-tight">Scheduler</p>
+          </div>
+          {/* Notification Bell (desktop sidebar) */}
+          <div className="hidden md:block">
+            <NotificationBell onClick={() => setNotifDropdownOpen(!notifDropdownOpen)} />
           </div>
           <button
             onClick={() => setOpen(false)}
@@ -255,6 +266,12 @@ export default function DashboardLayout() {
           </div>
         </>
       )}
+
+      {/* Notification Dropdown */}
+      <NotificationDropdown
+        open={notifDropdownOpen}
+        onClose={() => setNotifDropdownOpen(false)}
+      />
 
       {/* Main content */}
       <div className="min-w-0 flex-1 [overflow-x:clip]">
