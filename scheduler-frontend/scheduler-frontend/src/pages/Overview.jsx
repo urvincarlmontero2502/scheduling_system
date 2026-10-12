@@ -48,8 +48,14 @@ export default function Overview() {
   const { user } = useAuth();
   const toast = useToast();
   const [stats, setStats] = useState({ pending: 0, approved: 0 });
-  const [resources, setResources] = useState(() => readCache(CACHE_KEYS.RESOURCES) || []);
-  const [loading, setLoading] = useState(() => (readCache(CACHE_KEYS.RESOURCES) ? false : true));
+  const [resources, setResources] = useState(() => {
+    const cached = readCache(CACHE_KEYS.RESOURCES);
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = readCache(CACHE_KEYS.RESOURCES);
+    return !(cached && cached.length > 0);
+  });
 
   const [apiStatus, setApiStatus] = useState(() => {
     const cached = readCache(CACHE_KEYS.HEALTH);
@@ -85,11 +91,13 @@ export default function Overview() {
     // If cached data exists, populate state immediately (0ms render)
     const cachedResources = readCache(CACHE_KEYS.RESOURCES);
     const cachedBookings = readCache(CACHE_KEYS.BOOKINGS);
-    if (cachedResources) {
+    if (cachedResources && cachedResources.length > 0) {
       const cachedStats = computeStats(cachedBookings || []);
       setStats(cachedStats);
       setResources(cachedResources);
       setLoading(false);
+    } else {
+      setLoading(true);
     }
 
     // Background health check (parallel with data fetch)
@@ -117,15 +125,21 @@ export default function Overview() {
 
         const bookings = Array.isArray(bookingsRes?.data)
           ? bookingsRes.data
-          : Array.isArray(bookingsRes)
-          ? bookingsRes
-          : [];
+          : Array.isArray(bookingsRes?.data?.data)
+            ? bookingsRes.data.data
+            : Array.isArray(bookingsRes)
+              ? bookingsRes
+              : [];
         const fetchedResources =
-          Array.isArray(resourcesRes?.data) ? resourcesRes.data : [];
+          Array.isArray(resourcesRes?.data)
+            ? resourcesRes.data
+            : Array.isArray(resourcesRes?.data?.data)
+              ? resourcesRes.data.data
+              : [];
 
-        // Update cache
-        writeCache(CACHE_KEYS.BOOKINGS, bookings);
-        writeCache(CACHE_KEYS.RESOURCES, fetchedResources);
+        // Update cache (only if non-empty to avoid stale empty-array lock-in)
+        if (bookings.length > 0) writeCache(CACHE_KEYS.BOOKINGS, bookings);
+        if (fetchedResources.length > 0) writeCache(CACHE_KEYS.RESOURCES, fetchedResources);
 
         // Update state
         setStats(computeStats(bookings));

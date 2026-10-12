@@ -81,19 +81,27 @@ export default function Resources() {
   const loadResources = () => {
     // If we have cached data, don't show loading spinner (stale-while-revalidate)
     const cached = readCache(CACHE_KEYS.RESOURCES);
-    if (!cached) {
-      setLoading(true);
-    } else {
+    if (cached && cached.length > 0) {
       setResources(cached);
       setLoading(false);
+    } else {
+      setLoading(true);
     }
 
     api
       .fetchResources?.()
       .then((res) => {
-        const data = Array.isArray(res.data) ? res.data : [];
+        // Handle both direct array and Laravel resource collection wrapping
+        const d = res?.data;
+        const data = Array.isArray(d)
+          ? d
+          : Array.isArray(d?.data)
+            ? d.data
+            : [];
         // Update cache + state
-        writeCache(CACHE_KEYS.RESOURCES, data);
+        if (data.length > 0) {
+          writeCache(CACHE_KEYS.RESOURCES, data);
+        }
         setResources(data);
       })
       .catch((err) => {

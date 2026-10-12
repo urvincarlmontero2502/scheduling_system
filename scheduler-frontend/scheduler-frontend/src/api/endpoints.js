@@ -80,11 +80,22 @@ export const fetchBookings = (params) => {
   if (!params) {
     const cached = readCache(CACHE_KEYS.BOOKINGS, CACHE_TTL);
     if (cached) {
-      return Promise.resolve({ data: cached });
+      if (cached.length === 0) {
+        invalidateCache(CACHE_KEYS.BOOKINGS);
+      } else {
+        return Promise.resolve({ data: cached });
+      }
     }
   }
   return client.get("/bookings", { params }).then((res) => {
-    if (!params) writeCache(CACHE_KEYS.BOOKINGS, res.data);
+    if (!params) {
+      const d = res?.data;
+      const data = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
+      if (data.length > 0) {
+        writeCache(CACHE_KEYS.BOOKINGS, data);
+      }
+      return { data };
+    }
     return res;
   });
 };
@@ -103,15 +114,31 @@ export const invalidateBookingsCache = () => invalidateCache(CACHE_KEYS.BOOKINGS
 export const deleteBooking = (id) => client.delete(`/bookings/${id}`);
 
 // --- Resources (facilities & vehicles) ---------------------------------
+const extractArray = (res) => {
+  const d = res?.data;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  return [];
+};
+
 export const fetchResources = (type) => {
   const cacheKey = type ? `${CACHE_KEYS.RESOURCES}_${type}` : CACHE_KEYS.RESOURCES;
   const cached = readCache(cacheKey, CACHE_TTL);
   if (cached) {
-    return Promise.resolve({ data: cached });
+    // Don't serve empty arrays from cache — force a fresh fetch
+    if (cached.length === 0) {
+      invalidateCache(cacheKey);
+    } else {
+      return Promise.resolve({ data: cached });
+    }
   }
   return client.get("/resources", { params: { type } }).then((res) => {
-    writeCache(cacheKey, res.data);
-    return res;
+    const data = extractArray(res);
+    // Only cache non-empty results to avoid stale empty-array lock-in
+    if (data.length > 0) {
+      writeCache(cacheKey, data);
+    }
+    return { data };
   });
 };
 

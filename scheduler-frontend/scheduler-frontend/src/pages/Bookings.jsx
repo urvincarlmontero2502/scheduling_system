@@ -183,8 +183,14 @@ function RejectModal({ booking, onClose, onConfirm }) {
 export default function Bookings() {
   const { user } = useAuth();
   const toast = useToast();
-  const [bookings, setBookings] = useState(() => readCache(CACHE_KEYS.BOOKINGS) || []);
-  const [loading, setLoading] = useState(() => (readCache(CACHE_KEYS.BOOKINGS) ? false : true));
+  const [bookings, setBookings] = useState(() => {
+    const cached = readCache(CACHE_KEYS.BOOKINGS);
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = readCache(CACHE_KEYS.BOOKINGS);
+    return !(cached && cached.length > 0);
+  });
   const [activeTab, setActiveTab] = useState("pending");
   const [viewMode, setViewMode] = useState("card");
   const [search, setSearch] = useState("");
@@ -196,20 +202,25 @@ export default function Bookings() {
   useEffect(() => {
     // If cached data exists, render immediately and background-fetch
     const cached = readCache(CACHE_KEYS.BOOKINGS);
-    if (cached) {
+    if (cached && cached.length > 0) {
       setBookings(cached);
       setLoading(false);
+    } else {
+      setLoading(true);
     }
 
     api
       .fetchBookings()
       .then((res) => {
-        const data = Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-          ? res
-          : [];
-        writeCache(CACHE_KEYS.BOOKINGS, data);
+        const d = res?.data;
+        const data = Array.isArray(d)
+          ? d
+          : Array.isArray(d?.data)
+            ? d.data
+            : Array.isArray(res)
+              ? res
+              : [];
+        if (data.length > 0) writeCache(CACHE_KEYS.BOOKINGS, data);
         setBookings(data);
       })
       .catch(() => {
