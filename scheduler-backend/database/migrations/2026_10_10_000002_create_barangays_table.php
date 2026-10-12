@@ -11,18 +11,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Check if table already exists (using raw SQL for Supabase reliability)
-        $tables = DB::connection()
-            ->select("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-        $tableNames = array_map(fn($t) => $t->table_name, $tables);
-
-        if (!in_array('barangays', $tableNames)) {
-            DB::statement('CREATE TABLE barangays (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL UNIQUE,
-                created_at TIMESTAMP NULL,
-                updated_at TIMESTAMP NULL
-            )');
+        if (!Schema::hasTable('barangays')) {
+            Schema::create('barangays', function (Blueprint $table) {
+                $table->id();
+                $table->string('name')->unique();
+                $table->timestamps();
+            });
 
             // Seed default barangays
             $barangays = [

@@ -12,46 +12,56 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Use raw SQL to add columns if they don't exist (more reliable than Schema::hasColumn on Supabase)
-        $columns = DB::connection()
-            ->select("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND table_schema = 'public'");
+        $tableName = 'users';
 
-        $columnNames = array_map(fn($c) => $c->column_name, $columns);
+        // Get existing columns — works on both SQLite and PostgreSQL
+        $rawColumns = DB::connection()->getSchemaBuilder()->getColumnListing($tableName);
+        $existingColumns = array_map(function ($col) {
+            // SQLite returns plain strings; PostgreSQL may return objects/arrays
+            if (is_array($col)) {
+                return $col['name'] ?? $col['column_name'] ?? '';
+            }
+            if (is_object($col)) {
+                return $col->name ?? $col->column_name ?? '';
+            }
+            return (string) $col;
+        }, $rawColumns);
 
-        if (!in_array('google_id', $columnNames)) {
-            DB::statement('ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL');
-            DB::statement('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
+        if (!in_array('google_id', $existingColumns)) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('google_id')->nullable()->index();
+            });
         }
 
-        if (!in_array('email_verified_at', $columnNames)) {
+        if (!in_array('email_verified_at', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP NULL');
         }
 
-        if (!in_array('pending_email', $columnNames)) {
+        if (!in_array('pending_email', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN pending_email VARCHAR(255) NULL');
         }
 
-        if (!in_array('email_verification_token', $columnNames)) {
+        if (!in_array('email_verification_token', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN email_verification_token VARCHAR(64) NULL');
         }
 
-        if (!in_array('email_verification_sent_at', $columnNames)) {
+        if (!in_array('email_verification_sent_at', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN email_verification_sent_at TIMESTAMP NULL');
         }
 
-        if (!in_array('profile_image', $columnNames)) {
+        if (!in_array('profile_image', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL');
         }
 
-        if (!in_array('barangay', $columnNames)) {
+        if (!in_array('barangay', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN barangay VARCHAR(255) NULL');
         }
 
-        if (!in_array('department', $columnNames)) {
+        if (!in_array('department', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN department VARCHAR(255) NULL');
         }
 
-        if (!in_array('avatar', $columnNames)) {
+        if (!in_array('avatar', $existingColumns)) {
             DB::statement('ALTER TABLE users ADD COLUMN avatar VARCHAR(500) NULL');
         }
     }

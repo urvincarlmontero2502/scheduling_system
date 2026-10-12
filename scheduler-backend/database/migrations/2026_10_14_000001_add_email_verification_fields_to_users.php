@@ -70,5 +70,6 @@ return new class extends Migration
             if (Schema::hasColumn("users", "email_verified_at")) {
                 $table->dropColumn("email_verified_at");
             }
+        });
     }
 };
