@@ -103,8 +103,8 @@ export default function DashboardLayout() {
           <CalendarClock size={18} />
         </div>
         <p className="text-[16px] font-bold">Scheduler</p>
-        {/* Notification Bell (mobile) */}
-        <div className="ml-auto">
+        {/* Notification Bell (mobile only) */}
+        <div className="ml-auto md:hidden">
           <NotificationBell onClick={() => setNotifDropdownOpen(!notifDropdownOpen)} />
         </div>
       </header>

@@ -458,10 +458,12 @@ export default function Overview() {
                   : "Database Error"}
             </span>
           </div>
-          {/* Notification Bell */}
-          <NotificationBell
-            onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-          />
+          {/* Notification Bell (desktop only) */}
+          <div className="hidden md:block">
+            <NotificationBell
+              onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+            />
+          </div>
         </div>
       </header>
 
