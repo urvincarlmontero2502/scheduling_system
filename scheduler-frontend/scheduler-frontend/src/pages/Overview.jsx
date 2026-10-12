@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
-import { Building2, Car, Search, Filter, Calendar } from "lucide-react";
+import { Building2, Car, Search, Filter, Calendar, Wrench } from "lucide-react";
 import * as api from "../api/endpoints";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import VehicleBookingModal from "../components/VehicleBookingModal";
@@ -520,11 +520,25 @@ export default function Overview() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isMaintenance) return;
                             handleOpenBooking(item);
                           }}
-                          className="mt-auto w-full rounded-lg bg-brand px-2 py-1.5 text-[10px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1"
+                          disabled={isMaintenance}
+                          className={`mt-auto w-full rounded-lg px-2 py-1.5 text-[10px] font-medium flex items-center justify-center gap-1 transition ${
+                            isMaintenance
+                              ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-80 border-none shadow-none"
+                              : "bg-brand text-white hover:opacity-90"
+                          }`}
                         >
-                          <Calendar size={12} /> Request
+                          {isMaintenance ? (
+                            <>
+                              <Wrench size={12} /> Under Maintenance
+                            </>
+                          ) : (
+                            <>
+                              <Calendar size={12} /> Request
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -614,11 +628,25 @@ export default function Overview() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isMaintenance) return;
                             handleOpenBooking(item);
                           }}
-                          className="mt-auto w-full rounded-lg bg-brand px-2 py-1.5 text-[10px] font-medium text-white hover:opacity-90 transition flex items-center justify-center gap-1"
+                          disabled={isMaintenance}
+                          className={`mt-auto w-full rounded-lg px-2 py-1.5 text-[10px] font-medium flex items-center justify-center gap-1 transition ${
+                            isMaintenance
+                              ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-80 border-none shadow-none"
+                              : "bg-brand text-white hover:opacity-90"
+                          }`}
                         >
-                          <Calendar size={12} /> Request
+                          {isMaintenance ? (
+                            <>
+                              <Wrench size={12} /> Under Maintenance
+                            </>
+                          ) : (
+                            <>
+                              <Calendar size={12} /> Request
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>

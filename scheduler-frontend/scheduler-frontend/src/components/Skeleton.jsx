@@ -118,3 +118,87 @@ export const SkeletonBookingTableRow = () => (
 );
 
 export default Skeleton;
+
+/**
+ * Full app-shell skeleton — mirrors the DashboardLayout structure
+ * (sidebar + top header + content area with pulsing cards).
+ * Used by ProtectedRoute while verifying auth session.
+ */
+export function SkeletonAppShell() {
+  // Sidebar nav items: Overview, Calendar, Bookings, + optional admin items
+  const navItemCount = 3; // Overview, Calendar, Bookings (user-level)
+
+  return (
+    <div className="min-h-screen bg-paper md:flex">
+      {/* Sidebar skeleton (fixed on desktop) */}
+      <aside className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-line bg-white md:sticky md:top-0 md:z-auto md:h-screen">
+        {/* Brand / logo area */}
+        <div className="flex items-center gap-3 px-6 py-6">
+          <Skeleton className="h-9 w-9 items-center justify-center rounded-lg bg-gray-200" />
+          <Skeleton className="h-5 w-24 bg-gray-200 rounded" />
+        </div>
+        {/* Nav links */}
+        <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-3">
+          {Array.from({ length: navItemCount }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-3.5 py-2.5">
+              <Skeleton className="h-5 w-5 bg-gray-200 rounded" />
+              <Skeleton className="h-3 w-20 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </nav>
+        {/* User profile + sign out */}
+        <div className="border-t border-line bg-white py-4">
+          <div className="mb-4 flex items-center gap-3 px-3 py-2">
+            <Skeleton className="h-10 w-10 rounded-full bg-gray-200" />
+            <div className="flex-1 space-y-1">
+              <Skeleton className="h-3 w-3/4 bg-gray-200 rounded" />
+              <Skeleton className="h-3 w-1/2 bg-gray-200 rounded" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-3.5 py-2.5">
+            <Skeleton className="h-5 w-5 bg-gray-200 rounded" />
+            <Skeleton className="h-3 w-16 bg-gray-200 rounded" />
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content area */}
+      <div className="min-w-0 flex-1 md:ml-0">
+        {/* Top header bar */}
+        <div className="border-b border-line bg-white px-4 sm:px-6 py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <Skeleton className="h-5 w-48 bg-gray-200 rounded" />
+            <div className="flex gap-3">
+              <Skeleton className="h-2.5 w-2.5 rounded-full bg-gray-200" />
+              <Skeleton className="h-3 w-24 bg-gray-200 rounded" />
+            </div>
+          </div>
+          <Skeleton className="h-3 w-full max-w-md bg-gray-200 rounded" />
+        </div>
+
+        {/* Stats grid (4 cards) */}
+        <div className="grid grid-cols-2 gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonStatCard key={i} />
+          ))}
+        </div>
+
+        {/* Content area — resource cards in 2-column grid */}
+        <div className="px-4 sm:px-6 pb-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-40 bg-gray-200 rounded" />
+            <div className="flex items-center gap-1.5">
+              <Skeleton className="h-3 w-16 bg-gray-200 rounded" />
+              <Skeleton className="h-3 w-20 bg-gray-200 rounded" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonResourceCard key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
