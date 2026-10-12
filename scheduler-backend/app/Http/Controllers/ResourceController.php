@@ -64,7 +64,7 @@ class ResourceController extends Controller
             });
 
             return response()->json($resources);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Return detailed error in dev mode; generic message otherwise
             $message = config('app.debug')
                 ? $e->getMessage() . ' | File: ' . $e->getFile() . ':' . $e->getLine()

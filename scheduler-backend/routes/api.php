@@ -94,6 +94,37 @@ Route::get('/diagnostics/oauth-schema', function () {
     ]);
 });
 
+// Diagnostic: check resources table schema
+Route::get('/diagnostics/resources-schema', function () {
+    $result = ['resources_table_exists' => true, 'columns' => [], 'missing_columns' => []];
+    
+    try {
+        $cols = DB::connection()
+            ->select("SELECT column_name FROM information_schema.columns WHERE table_name = 'resources'");
+        $result['columns'] = array_map(fn($c) => $c->column_name, $cols);
+        
+        foreach (['resource_id', 'name', 'type', 'status', 'image', 'description'] as $col) {
+            if (!in_array($col, $result['columns'])) {
+                $result['missing_columns'][] = $col;
+            }
+        }
+    } catch (Exception $e) {
+        $result['resources_table_exists'] = false;
+        $result['error'] = $e->getMessage();
+    }
+    
+    // Also check detail tables
+    try {
+        $tables = DB::connection()
+            ->select("SELECT table_name FROM information_schema.tables WHERE table_name IN ('facility_details', 'vehicle_details')");
+        $result['detail_tables'] = array_map(fn($t) => $t->table_name, $tables);
+    } catch (Exception $e) {
+        $result['detail_tables_error'] = $e->getMessage();
+    }
+    
+    return response()->json($result);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
 
     // Authentication
