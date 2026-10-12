@@ -14,17 +14,19 @@ class ResourceController extends Controller
         try {
             // Select only necessary columns to minimize payload:
             // resource_id, name, type, status, image, description
-            $columns = ['resource_id', 'name', 'type', 'status', 'image'];
+            // Use explicit table prefix on resource_id to avoid ambiguity when
+            // joining facility_details and vehicle_details (both have resource_id)
+            $columns = ['resources.resource_id', 'resources.name', 'resources.type', 'resources.status', 'resources.image'];
 
             // Check if description column exists before selecting it
             if (Schema::hasColumn('resources', 'description')) {
-                $columns[] = 'description';
+                $columns[] = 'resources.description';
             }
 
             $query = Resource::query()->select($columns);
 
             if ($request->has('type')) {
-                $query->where('type', $request->query('type'));
+                $query->where('resources.type', $request->query('type'));
             }
 
             $isFacility = $request->query('type') === 'facility';
@@ -65,8 +67,10 @@ class ResourceController extends Controller
 
             return response()->json($resources);
         } catch (\Throwable $e) {
-            // Always return the actual error message for diagnostics
-            $message = $e->getMessage() . ' | File: ' . $e->getFile() . ':' . $e->getLine();
+            // Return detailed error in dev mode; user-friendly message otherwise
+            $message = config('app.debug')
+                ? $e->getMessage() . ' | File: ' . $e->getFile() . ':' . $e->getLine()
+                : 'Failed to fetch resources';
             return response()->json(['error' => $message], 500);
         }
     }
