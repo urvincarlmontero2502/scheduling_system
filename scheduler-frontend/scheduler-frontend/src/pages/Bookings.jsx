@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/Toast";
+import {
+  readCache,
+  writeCache,
+  invalidateCache,
+  CACHE_KEYS,
+} from "../utils/cache";
 import {
   Check,
   X,
@@ -17,7 +25,6 @@ import {
 } from "lucide-react";
 import * as api from "../api/endpoints";
 import StatusBadge from "../components/StatusBadge";
-import { useAuth } from "../context/AuthContext";
 import {
   SkeletonBookingCard,
   SkeletonBookingTableRow,
@@ -175,10 +182,11 @@ function RejectModal({ booking, onClose, onConfirm }) {
 
 export default function Bookings() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const [bookings, setBookings] = useState(() => readCache(CACHE_KEYS.BOOKINGS) || []);
+  const [loading, setLoading] = useState(() => (readCache(CACHE_KEYS.BOOKINGS) ? false : true));
   const [activeTab, setActiveTab] = useState("pending");
-  const [viewMode, setViewMode] = useState("card"); // "card" or "table"
+  const [viewMode, setViewMode] = useState("card");
   const [search, setSearch] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("all");
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -186,18 +194,40 @@ export default function Bookings() {
   const canModerate = user?.role === "admin";
 
   useEffect(() => {
+    // If cached data exists, render immediately and background-fetch
+    const cached = readCache(CACHE_KEYS.BOOKINGS);
+    if (cached) {
+      setBookings(cached);
+      setLoading(false);
+    }
+
     api
       .fetchBookings()
       .then((res) => {
         const data = Array.isArray(res?.data)
           ? res.data
           : Array.isArray(res)
-            ? res
-            : [];
+          ? res
+          : [];
+        writeCache(CACHE_KEYS.BOOKINGS, data);
         setBookings(data);
       })
-      .catch(() => {})
+      .catch(() => {
+        // Keep cached data on error
+      })
       .finally(() => setLoading(false));
+
+    // Listen for cache invalidation events from other pages
+    const handler = () => {
+      const cached = readCache(CACHE_KEYS.BOOKINGS);
+      if (cached) setBookings(cached);
+    };
+    window.addEventListener("cacheInvalidated", handler);
+    window.addEventListener("bookingUpdated", handler);
+    return () => {
+      window.removeEventListener("cacheInvalidated", handler);
+      window.removeEventListener("bookingUpdated", handler);
+    };
   }, []);
 
   async function handleStatusChange(id, status, reason = "") {
@@ -210,33 +240,41 @@ export default function Bookings() {
     if (status === "approved" && targetBooking) {
       const hasConflict = hasTimeDateConflict(targetBooking, bookings);
       if (hasConflict) {
-        alert(
-          "Conflict detected: This resource is already booked for the selected date and time. The request has been automatically rejected. Please advise the user to reschedule.",
+        toast.error(
+          "Conflict detected: This resource is already booked for the selected date and time. The request has been automatically rejected.",
         );
         status = "rejected";
       }
     }
 
+    // --- Optimistic: update local state + cache immediately ---
+    const prevBookings = [...bookings];
     setBookings((prev) =>
       prev.map((b) =>
         b.id === id || b.booking_id === id ? { ...b, status } : b,
       ),
     );
+    writeCache(
+      CACHE_KEYS.BOOKINGS,
+      prevBookings.map((b) =>
+        b.id === id || b.booking_id === id ? { ...b, status } : b,
+      ),
+    );
+
     try {
       if (status === "rejected" && reason) {
         await api.updateBookingStatus(id, status, { remarks: reason });
       } else {
         await api.updateBookingStatus(id, status);
       }
+      toast.success(`Booking ${status === "approved" ? "approved" : status === "rejected" ? "rejected" : "updated"} successfully`);
+      window.dispatchEvent(new Event("cacheInvalidated"));
+      invalidateCache(CACHE_KEYS.HEALTH);
     } catch (err) {
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === id || b.booking_id === id
-            ? { ...b, status: previousStatus }
-            : b,
-        ),
-      );
-      alert(
+      // --- Rollback ---
+      setBookings(prevBookings);
+      writeCache(CACHE_KEYS.BOOKINGS, prevBookings);
+      toast.error(
         err?.response?.data?.message || "Could not update the booking status.",
       );
     }
@@ -251,7 +289,7 @@ export default function Bookings() {
     );
 
     if (approvedBookings.length === 0) {
-      alert("No approved bookings to delete.");
+      toast.info("No approved bookings to delete.");
       return;
     }
 
@@ -261,11 +299,14 @@ export default function Bookings() {
     if (!confirmed) return;
 
     const approvedIds = approvedBookings.map((b) => b.id || b.booking_id);
+    const prevBookings = [...bookings];
 
-    // Optimistically remove approved bookings from state
-    setBookings((prev) =>
-      prev.filter((b) => !approvedIds.includes(b.id || b.booking_id)),
+    // Optimistically remove approved bookings from state + cache
+    const updated = bookings.filter(
+      (b) => !approvedIds.includes(b.id || b.booking_id),
     );
+    setBookings(updated);
+    writeCache(CACHE_KEYS.BOOKINGS, updated);
 
     try {
       await Promise.all(
@@ -275,19 +316,13 @@ export default function Bookings() {
             : api.updateBookingStatus(id, "deleted"),
         ),
       );
+      toast.success(`${approvedBookings.length} booking(s) deleted successfully`);
+      window.dispatchEvent(new Event("cacheInvalidated"));
     } catch {
-      // Revert/refetch on failure
-      api
-        .fetchBookings()
-        .then((res) => {
-          const data = Array.isArray(res?.data)
-            ? res.data
-            : Array.isArray(res)
-              ? res
-              : [];
-          setBookings(data);
-        })
-        .catch(() => {});
+      // Revert on failure
+      setBookings(prevBookings);
+      writeCache(CACHE_KEYS.BOOKINGS, prevBookings);
+      toast.error("Failed to delete some bookings. Please try again.");
     }
   }
 

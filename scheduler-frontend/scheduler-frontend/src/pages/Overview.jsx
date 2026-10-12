@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { isSpecialEvent } from "../utils/specialEvents";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/Toast";
+import {
+  readCache,
+  writeCache,
+  invalidateCache,
+  CACHE_KEYS,
+} from "../utils/cache";
 import { Building2, Car, Search, Filter, Calendar, Wrench } from "lucide-react";
 import * as api from "../api/endpoints";
 import FacilityBookingModal from "../components/FacilityBookingModal";
@@ -39,12 +46,19 @@ function formatCapacity(cap) {
 
 export default function Overview() {
   const { user } = useAuth();
+  const toast = useToast();
   const [stats, setStats] = useState({ pending: 0, approved: 0 });
-  const [resources, setResources] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [resources, setResources] = useState(() => readCache(CACHE_KEYS.RESOURCES) || []);
+  const [loading, setLoading] = useState(() => (readCache(CACHE_KEYS.RESOURCES) ? false : true));
 
-  const [apiStatus, setApiStatus] = useState(null);
-  const [dbStatus, setDbStatus] = useState(null);
+  const [apiStatus, setApiStatus] = useState(() => {
+    const cached = readCache(CACHE_KEYS.HEALTH);
+    return cached?.api ?? null;
+  });
+  const [dbStatus, setDbStatus] = useState(() => {
+    const cached = readCache(CACHE_KEYS.HEALTH);
+    return cached?.database ?? null;
+  });
 
   const [selectedResource, setSelectedResource] = useState(null);
   const [mainFilter, setMainFilter] = useState("all");
@@ -52,15 +66,40 @@ export default function Overview() {
   const [searchQuery, setSearchQuery] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
 
+  // Compute booking stats from bookings array (pure function)
+  const computeStats = (bookings) => {
+    const requests = (bookings || []).filter((b) => !isSpecialEvent(b));
+    const pendingCount = requests.filter(
+      (b) => b?.status?.toLowerCase() === "pending",
+    ).length;
+    const approvedCount = requests.filter(
+      (b) => b?.status?.toLowerCase() === "approved",
+    ).length;
+    return { pending: pendingCount, approved: approvedCount };
+  };
+
+  // Stale-while-revalidate: render cached data instantly, then background-fetch
   useEffect(() => {
     let isMounted = true;
 
-    api
-      .checkHealth?.()
+    // If cached data exists, populate state immediately (0ms render)
+    const cachedResources = readCache(CACHE_KEYS.RESOURCES);
+    const cachedBookings = readCache(CACHE_KEYS.BOOKINGS);
+    if (cachedResources) {
+      const cachedStats = computeStats(cachedBookings || []);
+      setStats(cachedStats);
+      setResources(cachedResources);
+      setLoading(false);
+    }
+
+    // Background health check (parallel with data fetch)
+    api.checkHealth?.()
       .then((res) => {
         if (!isMounted) return;
-        setApiStatus(res.data?.api ?? true);
-        setDbStatus(res.data?.database ?? true);
+        const healthData = res.data || {};
+        setApiStatus(healthData?.api ?? true);
+        setDbStatus(healthData?.database ?? true);
+        writeCache(CACHE_KEYS.HEALTH, healthData);
       })
       .catch(() => {
         if (!isMounted) return;
@@ -68,6 +107,7 @@ export default function Overview() {
         setDbStatus(false);
       });
 
+    // Background: fetch fresh data in parallel (no waterfall)
     Promise.all([
       api.fetchBookings?.().catch(() => ({ data: [] })),
       api.fetchResources?.().catch(() => ({ data: [] })),
@@ -80,23 +120,19 @@ export default function Overview() {
           : Array.isArray(bookingsRes)
           ? bookingsRes
           : [];
-        const requests = bookings.filter((b) => !isSpecialEvent(b));
+        const fetchedResources =
+          Array.isArray(resourcesRes?.data) ? resourcesRes.data : [];
 
-        const pendingCount = requests.filter(
-          (b) => b?.status?.toLowerCase() === "pending",
-        ).length;
-        const approvedCount = requests.filter(
-          (b) => b?.status?.toLowerCase() === "approved",
-        ).length;
+        // Update cache
+        writeCache(CACHE_KEYS.BOOKINGS, bookings);
+        writeCache(CACHE_KEYS.RESOURCES, fetchedResources);
 
-        setStats({
-          pending: pendingCount,
-          approved: approvedCount,
-        });
-
-        setResources(
-          Array.isArray(resourcesRes?.data) ? resourcesRes.data : [],
-        );
+        // Update state
+        setStats(computeStats(bookings));
+        setResources(fetchedResources);
+      })
+      .catch(() => {
+        // Keep cached data on error
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -107,7 +143,25 @@ export default function Overview() {
     };
   }, []);
 
+  // Listen for cache invalidation events (broadcast by other pages)
+  useEffect(() => {
+    const handler = () => {
+      const cachedResources = readCache(CACHE_KEYS.RESOURCES);
+      if (cachedResources) setResources(cachedResources);
+      const cachedBookings = readCache(CACHE_KEYS.BOOKINGS);
+      if (cachedBookings) setStats(computeStats(cachedBookings));
+    };
+    window.addEventListener("cacheInvalidated", handler);
+    window.addEventListener("bookingUpdated", handler);
+    return () => {
+      window.removeEventListener("cacheInvalidated", handler);
+      window.removeEventListener("bookingUpdated", handler);
+    };
+  }, []);
+
   const handleOpenBooking = (resource) => {
+    const status = getResourceStatus(resource);
+    if (status === "maintenance") return;
     setSelectedResource(resource);
   };
 
@@ -124,17 +178,101 @@ export default function Overview() {
       address: payload.address || null,
     };
 
+    // --- Optimistic update: close modal + show success immediately ---
+    const optimisticBooking = {
+      id: `optimistic-${Date.now()}`,
+      resource_id: payload.item_id,
+      resource: payload.resourceName || "",
+      full_name: payload.full_name || null,
+      purpose: payload.purpose,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+      start_time: payload.start_time,
+      end_time: payload.end_time,
+      status: "pending",
+    };
+
+    // Optimistically add to cached bookings + update stats
+    const cachedBookings = readCache(CACHE_KEYS.BOOKINGS) || [];
+    const updatedBookings = [optimisticBooking, ...cachedBookings];
+    writeCache(CACHE_KEYS.BOOKINGS, updatedBookings);
+
+    // Optimistically update stats
+    const prevStats = { ...stats };
+    setStats((prev) => ({ pending: prev.pending + 1, approved: prev.approved }));
+
+    // Optimistically update resource availability if direct use
+    if (payload.status === "approved") {
+      const cachedResources = readCache(CACHE_KEYS.RESOURCES) || [];
+      const updatedResources = cachedResources.map((r) =>
+        String(r.resource_id || r.id) === String(payload.item_id)
+          ? { ...r, available: false, status: "booked" }
+          : r,
+      );
+      writeCache(CACHE_KEYS.RESOURCES, updatedResources);
+      setResources(updatedResources);
+    }
+
+    // Close modal + show toast immediately (before server response)
+    setSelectedResource(null);
+    toast.success("Booking request submitted successfully!");
+
+    // Broadcast cache update to other tabs
+    window.dispatchEvent(new Event("bookingUpdated"));
+
+    // --- Background: fire API request ---
     return api
       .createBooking(apiPayload)
-      .then(() => {
-        alert("Booking request submitted successfully!");
-        setSelectedResource(null);
+      .then((res) => {
+        // Sync with server payload if available
+        if (res?.data) {
+          const serverBooking = res.data.booking || res.data;
+          const serverBookings = updatedBookings.map((b) =>
+            b.id === optimisticBooking.id ? serverBooking : b,
+          );
+          writeCache(CACHE_KEYS.BOOKINGS, serverBookings);
+          invalidateCache(CACHE_KEYS.HEALTH);
+        }
       })
       .catch((err) => {
-        console.error("Failed to submit booking request", err);
-        alert(
-          err?.response?.data?.message || "Failed to submit booking request.",
+        // --- Rollback on failure ---
+        // Restore previous stats
+        setStats(prevStats);
+
+        // Remove optimistic booking from cache
+        const currentBookings = readCache(CACHE_KEYS.BOOKINGS) || [];
+        const rolledBack = currentBookings.filter(
+          (b) => b.id !== optimisticBooking.id,
         );
+        writeCache(CACHE_KEYS.BOOKINGS, rolledBack);
+
+        // Restore resource availability
+        if (payload.status === "approved") {
+          const currentResources = readCache(CACHE_KEYS.RESOURCES) || [];
+          const restored = currentResources.map((r) =>
+            String(r.resource_id || r.id) === String(payload.item_id)
+              ? { ...r, available: true, status: "available" }
+              : r,
+          );
+          writeCache(CACHE_KEYS.RESOURCES, restored);
+          setResources(restored);
+        }
+
+        window.dispatchEvent(new Event("bookingUpdated"));
+
+        const errorMsg =
+          err?.response?.data?.message ||
+          err?.response?.data?.conflict_message ||
+          "Failed to submit booking request. Please try again.";
+
+        toast.error(errorMsg);
+
+        // If the error is a 409 conflict, re-open the modal
+        if (err?.response?.status === 409 || err?.response?.status === 422) {
+          setSelectedResource(payload._originalResource || null);
+        }
+
+        throw err;
       });
   };
 
@@ -661,14 +799,26 @@ export default function Overview() {
       <FacilityBookingModal
         isOpen={!!selectedResource && resourceType === "facility"}
         onClose={() => setSelectedResource(null)}
-        onSubmit={handleBookingSubmit}
+        onSubmit={(payload) =>
+          handleBookingSubmit({
+            ...payload,
+            _originalResource: selectedResource,
+            resourceName: selectedResource?.name,
+          })
+        }
         selectedFacility={selectedResource}
       />
 
       <VehicleBookingModal
         isOpen={!!selectedResource && resourceType === "vehicle"}
         onClose={() => setSelectedResource(null)}
-        onSubmit={handleBookingSubmit}
+        onSubmit={(payload) =>
+          handleBookingSubmit({
+            ...payload,
+            _originalResource: selectedResource,
+            resourceName: selectedResource?.name,
+          })
+        }
         selectedVehicle={selectedResource}
       />
     </div>

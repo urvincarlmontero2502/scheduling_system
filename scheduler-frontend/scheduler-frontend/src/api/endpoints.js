@@ -1,10 +1,15 @@
 import client from "./client";
+import { readCache, writeCache, CACHE_KEYS } from "../utils/cache";
+import { invalidateCache } from "../utils/cache";
+
+// Cache TTL: 2 minutes for most data
+const CACHE_TTL = 1000 * 60 * 2;
 
 // --- Auth -------------------------------------------------------------
 export const login = (credentials) => client.post("/login", credentials);
 export const getGoogleRedirect = () => client.get("/auth/google");
 export const googleCallback = (code) => client.post("/auth/google/callback", { code });
-export const completeGoogleRegistration = (tempToken, barangay) => 
+export const completeGoogleRegistration = (tempToken, barangay) =>
   client.post("/auth/google/complete-registration", { temporary_token: tempToken, barangay });
 export const forgotPassword = (email) => client.post("/forgot-password", { email });
 export const logout = () => client.post("/logout");
@@ -71,25 +76,59 @@ export const resolveImageUrl = (imagePath, fullName, email, size = 64) => {
 };
 
 // --- Bookings -----------------------------------------------------------
-export const fetchBookings = (params) => client.get("/bookings", { params });
-export const createBooking = (payload) => client.post("/bookings", payload);
+export const fetchBookings = (params) => {
+  if (!params) {
+    const cached = readCache(CACHE_KEYS.BOOKINGS, CACHE_TTL);
+    if (cached) {
+      return Promise.resolve({ data: cached });
+    }
+  }
+  return client.get("/bookings", { params }).then((res) => {
+    if (!params) writeCache(CACHE_KEYS.BOOKINGS, res.data);
+    return res;
+  });
+};
+export const createBooking = (payload) => {
+  invalidateCache(CACHE_KEYS.BOOKINGS);
+  return client.post("/bookings", payload);
+};
 export const checkAvailability = (params) => client.get("/bookings/availability", { params });
 export const updateBookingStatus = (id, status, extra = {}) =>
   client.patch(`/bookings/${id}/status`, { status, ...extra });
 
-// ⚡ ADD THIS MISSING FUNCTION:
+// Invalidate booking cache after mutation
+export const invalidateBookingsCache = () => invalidateCache(CACHE_KEYS.BOOKINGS);
+
+// Delete a booking
 export const deleteBooking = (id) => client.delete(`/bookings/${id}`);
 
 // --- Resources (facilities & vehicles) ---------------------------------
-export const fetchResources = (type) =>
-  client.get("/resources", { params: { type } });
+export const fetchResources = (type) => {
+  const cacheKey = type ? `${CACHE_KEYS.RESOURCES}_${type}` : CACHE_KEYS.RESOURCES;
+  const cached = readCache(cacheKey, CACHE_TTL);
+  if (cached) {
+    return Promise.resolve({ data: cached });
+  }
+  return client.get("/resources", { params: { type } }).then((res) => {
+    writeCache(cacheKey, res.data);
+    return res;
+  });
+};
 
-export const createResource = (payload) => client.post("/resources", payload);
+export const createResource = (payload) => {
+  invalidateCache(CACHE_KEYS.RESOURCES);
+  return client.post("/resources", payload);
+};
 
-export const updateResource = (id, payload) =>
-  client.put(`/resources/${id}`, payload);
+export const updateResource = (id, payload) => {
+  invalidateCache(CACHE_KEYS.RESOURCES);
+  return client.put(`/resources/${id}`, payload);
+};
 
-export const deleteResource = (id) => client.delete(`/resources/${id}`);
+export const deleteResource = (id) => {
+  invalidateCache(CACHE_KEYS.RESOURCES);
+  return client.delete(`/resources/${id}`);
+};
 
 // Maintenance status toggle
 export const setResourceMaintenance = (id) =>

@@ -10,17 +10,34 @@ class ResourceController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Resource::with(['facilityDetails', 'vehicleDetails']);
+        // Select only necessary columns to minimize payload:
+        // resource_id, name, type, status, description, image
+        // Plus capacity (facilities) / unit_name (vehicles) via optimized joins
+        $query = Resource::query()
+            ->select('resource_id', 'name', 'type', 'status', 'description', 'image');
 
         if ($request->has('type')) {
             $query->where('type', $request->query('type'));
         }
 
-        $resources = $query->get()->map(function ($r) {
-            $details = $r->type === 'facility' ? $r->facilityDetails : $r->vehicleDetails;
+        // Use left joins to fetch only the needed detail columns in a single query
+        // (avoids N+1 when eager-loading full models)
+        $isFacility = $request->query('type') === 'facility';
+        $isVehicle = $request->query('type') === 'vehicle';
 
+        if (!$request->has('type') || $isFacility) {
+            $query->leftJoin('facility_details', 'facility_details.resource_id', '=', 'resources.resource_id')
+                   ->addSelect('facility_details.capacity as facility_capacity');
+        }
+        if (!$request->has('type') || $isVehicle) {
+            $query->leftJoin('vehicle_details', 'vehicle_details.resource_id', '=', 'resources.resource_id')
+                   ->addSelect('vehicle_details.unit_name as vehicle_unit_name');
+        }
+
+        $resources = $query->get()->map(function ($r) {
             return [
                 'id' => $r->resource_id,
+                'resource_id' => $r->resource_id,
                 'name' => $r->name,
                 'type' => $r->type,
                 'image' => $r->image ? Storage::disk('assets')->url($r->image) : null,
@@ -29,9 +46,10 @@ class ResourceController extends Controller
                 'status' => $r->status,
                 'is_maintenance' => $r->status === 'maintenance',
                 'description' => $r->description,
-                'capacity' => $r->type === 'facility'
-                    ? ($details->capacity ?? null) . ' pax'
-                    : ($details->unit_name ?? null),
+                'capacity' => $r->type === 'facility' && $r->facility_capacity
+                    ? $r->facility_capacity . ' pax'
+                    : null,
+                'unit_name' => $r->type === 'vehicle' ? ($r->vehicle_unit_name ?? null) : null,
             ];
         });
 

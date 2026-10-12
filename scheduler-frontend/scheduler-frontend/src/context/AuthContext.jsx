@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import * as api from '../api/endpoints'
+import { clearAllCache } from '../utils/cache'
+import { ToastProvider } from '../components/Toast'
 
 const AuthContext = createContext(null)
 
@@ -75,6 +77,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('google_registration_token')
     sessionStorage.removeItem('auth_token')
     sessionStorage.removeItem('auth_user')
+    // Clear data cache on logout
+    clearAllCache()
     setUser(null)
   }
 
@@ -88,7 +92,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signOut, refreshUser }}>
-      {children}
+      <ToastProvider>{children}</ToastProvider>
     </AuthContext.Provider>
   )
 }

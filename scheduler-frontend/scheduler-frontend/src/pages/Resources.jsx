@@ -12,6 +12,13 @@ import {
 import * as api from "../api/endpoints";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/Toast";
+import {
+  readCache,
+  writeCache,
+  invalidateCache,
+  CACHE_KEYS,
+} from "../utils/cache";
 import VehicleBookingModal from "../components/VehicleBookingModal";
 import FacilityBookingModal from "../components/FacilityBookingModal";
 import { SkeletonResourceCard } from "../components/Skeleton";
@@ -48,9 +55,10 @@ function getResourceStatus(item) {
 
 export default function Resources() {
   const { user } = useAuth();
+  const toast = useToast();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
-  const [resources, setResources] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [resources, setResources] = useState(() => readCache(CACHE_KEYS.RESOURCES) || []);
+  const [loading, setLoading] = useState(() => (readCache(CACHE_KEYS.RESOURCES) ? false : true));
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
 
@@ -71,18 +79,44 @@ export default function Resources() {
   });
 
   const loadResources = () => {
-    setLoading(true);
+    // If we have cached data, don't show loading spinner (stale-while-revalidate)
+    const cached = readCache(CACHE_KEYS.RESOURCES);
+    if (!cached) {
+      setLoading(true);
+    } else {
+      setResources(cached);
+      setLoading(false);
+    }
+
     api
       .fetchResources?.()
       .then((res) => {
-        setResources(Array.isArray(res.data) ? res.data : []);
+        const data = Array.isArray(res.data) ? res.data : [];
+        // Update cache + state
+        writeCache(CACHE_KEYS.RESOURCES, data);
+        setResources(data);
       })
-      .catch((err) => console.error("Failed to fetch resources", err))
+      .catch((err) => {
+        console.error("Failed to fetch resources", err);
+        // Keep cached data on error
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadResources();
+
+    // Listen for cache invalidation events
+    const handler = () => {
+      const cached = readCache(CACHE_KEYS.RESOURCES);
+      if (cached) setResources(cached);
+    };
+    window.addEventListener("cacheInvalidated", handler);
+    window.addEventListener("bookingUpdated", handler);
+    return () => {
+      window.removeEventListener("cacheInvalidated", handler);
+      window.removeEventListener("bookingUpdated", handler);
+    };
   }, []);
 
   const handleOpenModal = (resource = null) => {
@@ -118,18 +152,29 @@ export default function Resources() {
 
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this resource?")) {
+      // --- Optimistic: remove from local state + cache immediately ---
+      const cached = readCache(CACHE_KEYS.RESOURCES) || [];
+      const updated = cached.filter(
+        (r) => String(r.resource_id || r.id) !== String(id),
+      );
+      writeCache(CACHE_KEYS.RESOURCES, updated);
+      setResources(updated);
+
       api
         .deleteResource?.(id)
         .then(() => {
-          loadResources();
+          toast.success("Resource deleted successfully");
+          window.dispatchEvent(new Event("cacheInvalidated"));
         })
         .catch((err) => {
-          console.error("Failed to delete resource", err);
+          // --- Rollback ---
+          writeCache(CACHE_KEYS.RESOURCES, cached);
+          setResources(cached);
           const msg =
             err?.response?.data?.message ||
             err?.message ||
             "Failed to delete resource. Please try again.";
-          alert(msg);
+          toast.error(msg);
         });
     }
   };
@@ -148,33 +193,79 @@ export default function Resources() {
       status: payload.status || "pending",
     };
 
+    // --- Optimistic update ---
+    const cachedResources = readCache(CACHE_KEYS.RESOURCES) || [];
+    const isDirectUse = payload.status === "approved";
+
+    // Optimistically update resource availability
+    if (isDirectUse) {
+      const updated = cachedResources.map((r) =>
+        String(r.resource_id || r.id) === String(payload.item_id)
+          ? { ...r, available: false, status: "booked" }
+          : r,
+      );
+      writeCache(CACHE_KEYS.RESOURCES, updated);
+      setResources(updated);
+    }
+
+    // Close modal + show toast immediately
+    setSelectedResource(null);
+    setResourceType(null);
+    toast.success(
+      isDirectUse
+        ? "Resource allocated successfully!"
+        : "Booking request submitted successfully!",
+    );
+
+    window.dispatchEvent(new Event("bookingUpdated"));
+
+    // --- Background: fire API request ---
     return api
       .createBooking(apiPayload)
       .then(() => {
-        if (payload.status === "approved") {
-          alert("Resource allocated successfully!");
-        } else {
-          alert("Booking request submitted successfully!");
-        }
-        setSelectedResource(null);
-        setResourceType(null);
+        // Success — cache already updated optimistically
+        invalidateCache(CACHE_KEYS.HEALTH);
       })
       .catch((err) => {
-        console.error("Failed to submit booking request", err);
-        alert(
-          err?.response?.data?.message || "Failed to submit booking request.",
-        );
+        // --- Rollback ---
+        if (isDirectUse) {
+          const restored = cachedResources.map((r) =>
+            String(r.resource_id || r.id) === String(payload.item_id)
+              ? { ...r, available: true, status: "available" }
+              : r,
+          );
+          writeCache(CACHE_KEYS.RESOURCES, restored);
+          setResources(restored);
+        }
+
+        window.dispatchEvent(new Event("bookingUpdated"));
+
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.conflict_message ||
+          "Failed to submit booking request. Please try again.";
+        toast.error(msg);
+
+        // If conflict, reopen modal
+        if (err?.response?.status === 409 || err?.response?.status === 422) {
+          setSelectedResource(payload._originalResource || null);
+        }
+
+        throw err;
       });
   };
 
   const handleMaintenanceToggle = (item) => {
     const resourceId = item.resource_id || item.id;
     if (!resourceId) {
-      alert("Error: Resource ID is missing. Please refresh the page and try again.");
+      toast.error("Error: Resource ID is missing. Please refresh and try again.");
       return;
     }
-    const isCurrentlyMaintenance = item.is_maintenance || item.status === "maintenance";
-    const actionText = isCurrentlyMaintenance ? "available" : "under maintenance";
+    const isCurrentlyMaintenance =
+      item.is_maintenance || item.status === "maintenance";
+    const actionText = isCurrentlyMaintenance
+      ? "available"
+      : "under maintenance";
 
     if (!window.confirm(`Mark "${item.name}" as ${actionText}?`)) return;
 
@@ -182,25 +273,48 @@ export default function Resources() {
       ? api.setResourceAvailable?.(resourceId)
       : api.setResourceMaintenance?.(resourceId);
 
+    // --- Optimistic: update local state + cache immediately ---
+    const cached = readCache(CACHE_KEYS.RESOURCES) || [];
+    const prevResources = [...cached];
+    const updated = cached.map((r) =>
+      String(r.resource_id || r.id) === String(resourceId)
+        ? {
+            ...r,
+            is_maintenance: !isCurrentlyMaintenance,
+            status: isCurrentlyMaintenance ? "available" : "maintenance",
+            available: isCurrentlyMaintenance ? true : false,
+          }
+        : r,
+    );
+    writeCache(CACHE_KEYS.RESOURCES, updated);
+    setResources(updated);
+
     request
-      .then((res) => {
-        loadResources();
+      .then(() => {
+        toast.success(
+          `Resource marked as ${actionText} successfully`,
+        );
+        window.dispatchEvent(new Event("cacheInvalidated"));
       })
       .catch((err) => {
-        console.error("Failed to update resource status", err);
+        // --- Rollback ---
+        writeCache(CACHE_KEYS.RESOURCES, prevResources);
+        setResources(prevResources);
+
+        let msg;
         if (err?.response?.status === 403) {
-          alert("You don't have permission to modify resource status. Please contact an administrator.");
+          msg = "You don't have permission to modify resource status.";
         } else if (err?.response?.status === 404) {
-          alert("Resource not found. It may have been deleted.");
+          msg = "Resource not found. It may have been deleted.";
         } else if (err?.code === "ERR_NETWORK") {
-          alert("Network error: Could not connect to the server. Please check your connection and try again.");
+          msg = "Network error: Could not connect to the server.";
         } else {
-          const msg =
+          msg =
             err?.response?.data?.message ||
             err?.message ||
-            "Failed to update resource status. Please try again.";
-          alert(`Failed to update resource status: ${msg}`);
+            "Failed to update resource status.";
         }
+        toast.error(msg);
       });
   };
 
@@ -226,17 +340,43 @@ export default function Resources() {
       data.append("_method", "PUT");
     }
 
+    // --- Optimistic: close modal + show success immediately ---
+    const prevResources = [...resources];
+    const actionText = editingResource ? "updated" : "created";
+
+    setIsModalOpen(false);
+    toast.success(`Resource ${actionText} successfully!`, { duration: 3000 });
+
     const request = editingResource
       ? client.post(`/resources/${editingResource.resource_id || editingResource.id}`, data)
       : api.createResource(data);
 
     request
-      .then(() => {
-        setIsModalOpen(false);
-        loadResources();
+      .then((res) => {
+        // Sync with server response if available
+        if (res?.data) {
+          const serverResource = res.data.resource || res.data;
+          if (serverResource) {
+            const updated = editingResource
+              ? prevResources.map((r) =>
+                  String(r.resource_id || r.id) ===
+                  String(editingResource.resource_id || editingResource.id)
+                    ? serverResource
+                    : r,
+                )
+              : [...prevResources, serverResource];
+            writeCache(CACHE_KEYS.RESOURCES, updated);
+            setResources(updated);
+          }
+        }
+        window.dispatchEvent(new Event("cacheInvalidated"));
       })
       .catch((err) => {
-        console.error("Failed to save resource", err.response?.data || err);
+        // --- Rollback: restore previous state ---
+        setResources(prevResources);
+        toast.error(
+          err?.response?.data?.message || "Failed to save resource. Please try again.",
+        );
       });
   };
 
@@ -566,7 +706,13 @@ export default function Resources() {
           setResourceType(null);
           setIsDirectUse(false);
         }}
-        onSubmit={handleBookingSubmit}
+        onSubmit={(payload) =>
+          handleBookingSubmit({
+            ...payload,
+            _originalResource: selectedResource,
+            resourceName: selectedResource?.name,
+          })
+        }
         selectedVehicle={selectedResource}
         isDirectUse={isDirectUse}
       />
@@ -579,7 +725,13 @@ export default function Resources() {
           setResourceType(null);
           setIsDirectUse(false);
         }}
-        onSubmit={handleBookingSubmit}
+        onSubmit={(payload) =>
+          handleBookingSubmit({
+            ...payload,
+            _originalResource: selectedResource,
+            resourceName: selectedResource?.name,
+          })
+        }
         selectedFacility={selectedResource}
         isDirectUse={isDirectUse}
       />
